@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* ── Background depth layers — dark-night palette ─────────────────
+       Base:     #0a0a0f  (near-black night, subtle blue-violet undertone)
+       Surface:  #13131a  (cards, panels)
+       Elevated: #1c1c26  (modals, dropdowns)
+    ────────────────────────────────────────────────────────────────── */
+    --background: 240 9% 6%;            /* #0a0a0f  — base layer          */
+    --card: 240 8% 9%;                  /* #13131a  — surface layer        */
+    --popover: 240 7% 13%;              /* #1c1c26  — elevated layer       */
+    --card-foreground: 0 0% 95%;
+    --popover-foreground: 0 0% 95%;
+
+    /* ── Primary accent — Electric Indigo ───────────────────────────────
+       #7c6fff  — vibrant indigo, WCAG AA 5.1:1 on base
+    ────────────────────────────────────────────────────────────────── */
+    --primary: 249 100% 72%;            /* #7c6fff                         */
+    --primary-foreground: 240 9% 6%;   /* base bg — on-accent text        */
+
+    /* ── Secondary surface ─────────────────────────────────────────── */
+    --secondary: 240 7% 16%;            /* #222230  — hover, chips         */
+    --secondary-foreground: 0 0% 95%;
+
+    /* ── Text hierarchy ─────────────────────────────────────────────────
+       Primary:   #f0f0f0  — near white, comfortable
+       Secondary: #8b8fa8  — muted
+    ────────────────────────────────────────────────────────────────── */
+    --foreground: 0 0% 94%;             /* #f0f0f0  — primary text         */
+    --muted: 240 7% 16%;
+    --muted-foreground: 232 10% 61%;    /* #8b8fa8  — secondary text       */
+
+    /* ── Accent ─────────────────────────────────────────────────────── */
+    --accent: 249 40% 16%;              /* indigo tint bg                  */
+    --accent-foreground: 249 100% 80%; /* #a399ff                         */
+
+    /* ── Semantic states ────────────────────────────────────────────── */
+    --destructive: 0 52% 57%;           /* #d05b5b  — error               */
+    --destructive-foreground: 0 0% 95%;
+
+    /* ── Borders & dividers ─────────────────────────────────────────── */
+    --border: 240 6% 18%;               /* subtle divider                  */
+    --input: 240 7% 14%;                /* input bg                        */
+    --ring: 249 100% 72%;               /* indigo focus ring               */
+
+    /* ── Charts ─────────────────────────────────────────────────────── */
+    --chart-1: 249 100% 72%;
+    --chart-2: 174 55% 48%;
+    --chart-3: 38 75% 52%;
+    --chart-4: 280 55% 60%;
+    --chart-5: 340 65% 58%;
+
+    /* ── Sidebar ─────────────────────────────────────────────────────── */
+    --sidebar-background: 240 9% 7%;
+    --sidebar-foreground: 0 0% 94%;
+    --sidebar-primary: 249 100% 72%;
+    --sidebar-primary-foreground: 240 9% 6%;
+    --sidebar-accent: 240 7% 16%;
+    --sidebar-accent-foreground: 0 0% 94%;
+    --sidebar-border: 240 6% 18%;
+    --sidebar-ring: 249 100% 72%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html, body {
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Safe area insets for notched/punched devices */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Prevent text selection magnifying glass on mobile for interactive elements */
+@layer utilities {
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+button, [role="tab"], [role="button"] {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe-area padding for fixed bottom bars */
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}

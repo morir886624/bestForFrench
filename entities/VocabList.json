@@ -1,0 +1,91 @@
+{
+  "name": "VocabList",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nom de la liste"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description"
+    },
+    "source_language": {
+      "type": "string",
+      "description": "Langue source"
+    },
+    "target_language": {
+      "type": "string",
+      "description": "Langue cible"
+    },
+    "words": {
+      "type": "array",
+      "description": "Mots de la liste",
+      "items": {
+        "type": "object",
+        "properties": {
+          "original": {
+            "type": "string"
+          },
+          "translation": {
+            "type": "string"
+          },
+          "pronunciation": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "color": {
+      "type": "string",
+      "description": "Couleur de la liste (hex ou classe tailwind)"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

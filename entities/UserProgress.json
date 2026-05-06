@@ -1,0 +1,135 @@
+{
+  "name": "UserProgress",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Email utilisateur"
+    },
+    "total_points": {
+      "type": "number",
+      "description": "Points totaux",
+      "default": 0
+    },
+    "correct_answers": {
+      "type": "number",
+      "description": "Bonnes r\u00e9ponses",
+      "default": 0
+    },
+    "total_answers": {
+      "type": "number",
+      "description": "R\u00e9ponses totales",
+      "default": 0
+    },
+    "streak": {
+      "type": "number",
+      "description": "S\u00e9rie actuelle",
+      "default": 0
+    },
+    "best_streak": {
+      "type": "number",
+      "description": "Meilleure s\u00e9rie",
+      "default": 0
+    },
+    "badges": {
+      "type": "array",
+      "description": "Badges d\u00e9bloqu\u00e9s",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sessions_count": {
+      "type": "number",
+      "description": "Nombre de sessions",
+      "default": 0
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Nom affich\u00e9"
+    },
+    "total_translations": {
+      "type": "number",
+      "description": "Nombre total de traductions",
+      "default": 0
+    },
+    "language_pairs": {
+      "type": "array",
+      "description": "Paires de langues utilis\u00e9es avec compteur",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pair": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "exercises_done": {
+      "type": "number",
+      "description": "Nombre d'exercices r\u00e9alis\u00e9s",
+      "default": 0
+    },
+    "exercises_correct": {
+      "type": "number",
+      "description": "Bonnes r\u00e9ponses aux exercices",
+      "default": 0
+    },
+    "exercises_total": {
+      "type": "number",
+      "description": "Total de questions d'exercices",
+      "default": 0
+    },
+    "exercises_points": {
+      "type": "number",
+      "description": "Points gagn\u00e9s via exercices",
+      "default": 0
+    }
+  },
+  "required": [
+    "user_email"
+  ],
+  "rls": {
+    "create": {
+      "data.user_email": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

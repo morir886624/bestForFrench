@@ -1,0 +1,100 @@
+{
+  "name": "SessionHistory",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Email utilisateur"
+    },
+    "section": {
+      "type": "string",
+      "enum": [
+        "vocab",
+        "quiz",
+        "grammar"
+      ],
+      "description": "Section concern\u00e9e"
+    },
+    "word_original": {
+      "type": "string",
+      "description": "Mot ou point de grammaire original"
+    },
+    "word_translation": {
+      "type": "string",
+      "description": "Traduction"
+    },
+    "word_pronunciation": {
+      "type": "string",
+      "description": "Prononciation"
+    },
+    "word_definition": {
+      "type": "string",
+      "description": "D\u00e9finition ou r\u00e8gle"
+    },
+    "quiz_result": {
+      "type": "string",
+      "enum": [
+        "correct",
+        "wrong"
+      ],
+      "description": "R\u00e9sultat pour quiz"
+    },
+    "topic": {
+      "type": "string",
+      "description": "Th\u00e8me/contexte/niveau"
+    },
+    "source_language": {
+      "type": "string"
+    },
+    "target_language": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_email",
+    "section",
+    "word_original",
+    "word_translation"
+  ],
+  "rls": {
+    "create": {
+      "data.user_email": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

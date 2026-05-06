@@ -1,0 +1,71 @@
+{
+  "name": "Translation",
+  "type": "object",
+  "properties": {
+    "original_word": {
+      "type": "string",
+      "description": "Le mot original"
+    },
+    "source_language": {
+      "type": "string",
+      "description": "Langue source"
+    },
+    "persian_translation": {
+      "type": "string",
+      "description": "Traduction en persan"
+    },
+    "definition": {
+      "type": "string",
+      "description": "D\u00e9finition du mot"
+    },
+    "pronunciation": {
+      "type": "string",
+      "description": "Prononciation en persan"
+    }
+  },
+  "required": [
+    "original_word",
+    "persian_translation"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,366 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, RefreshCw, ChevronRight, Volume2, FileSpreadsheet } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import SectionHistory from "@/components/history/SectionHistory";
+import ExportToSheetsButton from "@/components/ExportToSheetsButton";
+import { appendToSheet, isSheetsConfigured } from "@/lib/googleSheets";
+
+const LEVELS = [
+    { id: 'A1', label: 'A1 – Débutant', color: 'bg-green-100 text-green-700 border-green-200', bg: 'from-green-50 to-emerald-50', border: 'border-green-100' },
+    { id: 'A2', label: 'A2 – Élémentaire', color: 'bg-teal-100 text-teal-700 border-teal-200', bg: 'from-teal-50 to-cyan-50', border: 'border-teal-100' },
+    { id: 'B1', label: 'B1 – Intermédiaire', color: 'bg-blue-100 text-blue-700 border-blue-200', bg: 'from-blue-50 to-indigo-50', border: 'border-blue-100' },
+    { id: 'B2', label: 'B2 – Avancé', color: 'bg-purple-100 text-purple-700 border-purple-200', bg: 'from-purple-50 to-violet-50', border: 'border-purple-100' },
+    { id: 'C1', label: 'C1 – Expert', color: 'bg-rose-100 text-rose-700 border-rose-200', bg: 'from-rose-50 to-pink-50', border: 'border-rose-100' },
+];
+
+export default function GrammarTab({ appLang }) {
+    const [selectedLevel, setSelectedLevel] = useState('A1');
+    const [lessons, setLessons] = useState([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
+    const [lessonDone, setLessonDone] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [savedToSheet, setSavedToSheet] = useState(false);
+    const [isSavingSheet, setIsSavingSheet] = useState(false);
+
+    const level = LEVELS.find(l => l.id === selectedLevel);
+    const isFa = appLang === 'fa';
+    const fontStyle = isFa ? { fontFamily: 'Vazirmatn, sans-serif' } : {};
+
+    useEffect(() => {
+        base44.auth.me().then(setCurrentUser).catch(() => {});
+    }, []);
+
+    const fetchLessons = async () => {
+        setIsLoading(true);
+        setLessons([]);
+        setCurrentIndex(0);
+        setLessonDone(false);
+
+        const result = await base44.integrations.Core.InvokeLLM({
+            prompt: `Génère 5 fiches de grammaire française de niveau ${selectedLevel} pour un apprenant persanophone.
+Chaque fiche doit contenir :
+1. Le point de grammaire en français (ex: "Le présent de l'indicatif")
+2. La traduction persane du titre
+3. Une explication claire en français
+4. La même explication traduite en persan (فارسی)
+5. La règle principale en français (1-2 phrases)
+6. La même règle traduite en persan
+7. 2 exemples en français avec leur traduction persane
+8. Un point d'attention / erreur fréquente en français
+9. Ce même point d'attention traduit en persan
+
+Niveau ${selectedLevel}: ${level?.label}`,
+            response_json_schema: {
+                type: "object",
+                properties: {
+                    lessons: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                            title: { type: "string", description: "Point de grammaire en français" },
+                                            title_fa: { type: "string", description: "Titre en persan" },
+                                            explanation: { type: "string", description: "Explication en français" },
+                                            explanation_fa: { type: "string", description: "Explication traduite en persan" },
+                                            rule: { type: "string", description: "Règle principale en français" },
+                                            rule_fa: { type: "string", description: "Règle principale traduite en persan" },
+                                            examples: {
+                                                type: "array",
+                                                items: {
+                                                    type: "object",
+                                                    properties: {
+                                                        fr: { type: "string" },
+                                                        fa: { type: "string" }
+                                                    }
+                                                }
+                                            },
+                                            tip: { type: "string", description: "Erreur fréquente ou astuce en français" },
+                                            tip_fa: { type: "string", description: "Astuce traduite en persan" }
+                                        },
+                                        required: ["title", "title_fa", "explanation", "explanation_fa", "rule", "rule_fa", "examples", "tip", "tip_fa"]
+                        }
+                    }
+                },
+                required: ["lessons"]
+            }
+        });
+
+        setLessons(result.lessons || []);
+        setIsLoading(false);
+    };
+
+    const handleSaveLessonToSheet = async (l) => {
+        setIsSavingSheet(true);
+        const rows = (l.examples || []).map((ex, i) => [
+            selectedLevel, l.title, l.title_fa, l.rule,
+            ex.fr || '', ex.fa || '',
+            i === 0 ? l.tip : ''
+        ]);
+        if (rows.length === 0) rows.push([selectedLevel, l.title, l.title_fa, l.rule, '', '', l.tip]);
+        await appendToSheet('Grammaire', rows);
+        setSavedToSheet(true);
+        setIsSavingSheet(false);
+        toast.success("Fiche enregistrée dans Google Sheets !");
+        setTimeout(() => setSavedToSheet(false), 3000);
+    };
+
+    const speak = (text) => {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'fr-FR';
+        speechSynthesis.speak(u);
+    };
+
+    const handleNext = () => {
+        const lesson = lessons[currentIndex];
+        if (lesson && currentUser) {
+            base44.entities.SessionHistory.create({
+                user_email: currentUser.email,
+                section: 'grammar',
+                word_original: lesson.title,
+                word_translation: lesson.title_fa,
+                word_pronunciation: '',
+                word_definition: lesson.rule,
+                topic: `Niveau ${selectedLevel}`,
+                source_language: 'français',
+                target_language: 'persan',
+            }).catch(() => {});
+        }
+        if (currentIndex + 1 >= lessons.length) {
+            setLessonDone(true);
+        } else {
+            setCurrentIndex(i => i + 1);
+        }
+    };
+
+    const lesson = lessons[currentIndex];
+
+    return (
+        <div className="space-y-4">
+            {/* Level selector */}
+            <div className="flex flex-wrap gap-2">
+                {LEVELS.map(l => (
+                    <button
+                        key={l.id}
+                        onClick={() => { setSelectedLevel(l.id); setLessons([]); setCurrentIndex(0); setLessonDone(false); }}
+                        className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-all ${
+                            selectedLevel === l.id
+                                ? l.color + ' shadow-md scale-105'
+                                : 'bg-white/70 text-slate-500 border-slate-200 hover:border-slate-300'
+                        }`}
+                    >
+                        {l.id}
+                    </button>
+                ))}
+            </div>
+
+            <Card className={`border bg-gradient-to-br ${level.bg} ${level.border} shadow-lg`}>
+                <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <Badge className={`${level.color} border text-xs font-semibold`}>{level.label}</Badge>
+                            <p className="text-xs text-slate-500 mt-1">Grammaire française</p>
+                        </div>
+                        <Button
+                            onClick={fetchLessons}
+                            disabled={isLoading}
+                            size="sm"
+                            className="bg-white/80 text-indigo-700 border border-indigo-200 hover:bg-indigo-50 shadow-sm"
+                            variant="outline"
+                        >
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                            {lessons.length > 0 ? '5 nouvelles fiches' : 'Générer 5 fiches'}
+                        </Button>
+                    </div>
+
+                    {/* Progress */}
+                    {lessons.length > 0 && !lessonDone && (
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-slate-500">
+                                <span>Fiche {currentIndex + 1} sur {lessons.length}</span>
+                                <span>{Math.round(((currentIndex + 1) / lessons.length) * 100)}%</span>
+                            </div>
+                            <div className="h-1.5 bg-white/60 rounded-full overflow-hidden">
+                                <motion.div
+                                    className="h-full bg-indigo-500 rounded-full"
+                                    animate={{ width: `${((currentIndex + 1) / lessons.length) * 100}%` }}
+                                    transition={{ duration: 0.3 }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <AnimatePresence mode="wait">
+                        {isLoading && (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                className="flex items-center justify-center py-8 gap-2 text-slate-500">
+                                <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
+                                <span>Génération des fiches de grammaire...</span>
+                            </motion.div>
+                        )}
+
+                        {lessonDone && (
+                            <motion.div key="done" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                                className="text-center space-y-4 py-4">
+                                <div className="text-5xl">🎓</div>
+                                <h3 className="text-xl font-bold text-slate-800">Leçon terminée !</h3>
+                                <p className="text-slate-500 text-sm">Vous avez vu les {lessons.length} fiches de grammaire niveau {selectedLevel}.</p>
+                                <div className="flex flex-col gap-2">
+                                    <Button variant="outline" onClick={() => { setCurrentIndex(0); setLessonDone(false); }}
+                                        className="border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+                                        <RefreshCw className="h-4 w-4 mr-2" /> Revoir depuis le début
+                                    </Button>
+                                    <Button variant="outline" onClick={fetchLessons} disabled={isLoading} className="border-slate-200 text-slate-600">
+                                        <RefreshCw className="h-4 w-4 mr-2" /> 5 nouvelles fiches
+                                    </Button>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {lesson && !isLoading && !lessonDone && (
+                            <motion.div key={`lesson-${currentIndex}`}
+                                initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
+                                className="space-y-4">
+                                {/* Title */}
+                                <div className="bg-white/70 rounded-xl p-4 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-lg font-bold text-slate-800">{lesson.title}</h3>
+                                                <button onClick={() => speak(lesson.title)}
+                                                    className="p-1 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600">
+                                                    <Volume2 className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                            <p className="text-sm text-slate-500" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
+                                                {lesson.title_fa}
+                                            </p>
+                                        </div>
+                                        <Badge className={`${level.color} border text-xs`}>{selectedLevel}</Badge>
+                                    </div>
+                                    <p className="text-sm text-slate-600">{lesson.explanation}</p>
+                                    {lesson.explanation_fa && (
+                                        <p className="text-sm text-slate-500 mt-1 pt-1 border-t border-slate-100" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
+                                            {lesson.explanation_fa}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Rule */}
+                                <div className="bg-indigo-50 rounded-xl px-4 py-3 border border-indigo-100">
+                                    <p className="text-xs font-semibold text-indigo-600 mb-1">📌 Règle</p>
+                                    <p className="text-sm text-indigo-800">{lesson.rule}</p>
+                                    {lesson.rule_fa && (
+                                        <p className="text-sm text-indigo-600 mt-1 pt-1 border-t border-indigo-100" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
+                                            {lesson.rule_fa}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Examples */}
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Exemples</p>
+                                    {lesson.examples.map((ex, i) => (
+                                        <div key={i} className="bg-white/70 rounded-xl px-4 py-3 border border-slate-100 space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">FR</span>
+                                                <p className="text-sm font-medium text-slate-700">{ex.fr}</p>
+                                                <button onClick={() => speak(ex.fr)}
+                                                    className="ml-auto p-1 rounded-lg hover:bg-slate-100 text-slate-300 hover:text-slate-500">
+                                                    <Volume2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs bg-amber-100 text-amber-600 rounded-full px-2 py-0.5">FA</span>
+                                                <p className="text-sm text-amber-700" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
+                                                    {ex.fa}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Tip */}
+                                <div className="bg-amber-50 rounded-xl px-4 py-3 border border-amber-100">
+                                    <p className="text-xs font-semibold text-amber-600 mb-1">⚠️ Point d'attention</p>
+                                    <p className="text-sm text-amber-800">{lesson.tip}</p>
+                                    {lesson.tip_fa && (
+                                        <p className="text-sm text-amber-700 mt-1 pt-1 border-t border-amber-100" dir="rtl" style={{ fontFamily: 'Vazirmatn, sans-serif' }}>
+                                            {lesson.tip_fa}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Save to Sheets */}
+                                {isSheetsConfigured() && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSaveLessonToSheet(lesson)}
+                                        disabled={isSavingSheet || savedToSheet}
+                                        className={savedToSheet ? 'w-full border-green-400 text-green-600' : 'w-full border-emerald-300 text-emerald-700 hover:bg-emerald-50'}
+                                    >
+                                        {isSavingSheet ? (
+                                            <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Enregistrement...</>
+                                        ) : savedToSheet ? (
+                                            <><FileSpreadsheet className="h-4 w-4 mr-1.5" />Enregistré dans Sheets !</>
+                                        ) : (
+                                            <><FileSpreadsheet className="h-4 w-4 mr-1.5" />Enregistrer cette fiche dans Sheets</>
+                                        )}
+                                    </Button>
+                                )}
+
+                                {/* Next */}
+                                <Button onClick={handleNext} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                                    {currentIndex + 1 >= lessons.length ? '🎓 Terminer la leçon' : (
+                                        <span className="flex items-center gap-2">
+                                            Fiche suivante ({currentIndex + 2}/{lessons.length})
+                                            <ChevronRight className="h-4 w-4" />
+                                        </span>
+                                    )}
+                                </Button>
+                            </motion.div>
+                        )}
+
+                        {!lesson && !isLoading && lessons.length === 0 && (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                className="text-center py-6 text-slate-400">
+                                <p className="text-4xl mb-2">📝</p>
+                                <p className="text-sm">Cliquez sur "Générer 5 fiches" pour commencer une leçon de grammaire</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </CardContent>
+            </Card>
+
+            {/* Export to Sheets */}
+            {lessons.length > 0 && (
+                <div className="flex justify-end">
+                    <ExportToSheetsButton
+                        sheetName="Grammaire"
+                        label="Exporter ces fiches"
+                        rows={[
+                            ['Niveau', 'Titre (FR)', 'Titre (FA)', 'Règle', 'Exemple 1 FR', 'Exemple 1 FA'],
+                            ...lessons.map(l => [
+                                selectedLevel,
+                                l.title,
+                                l.title_fa,
+                                l.rule,
+                                l.examples?.[0]?.fr || '',
+                                l.examples?.[0]?.fa || '',
+                            ])
+                        ]}
+                    />
+                </div>
+            )}
+
+            {/* Revision history */}
+            {currentUser && <SectionHistory section="grammar" userEmail={currentUser.email} />}
+        </div>
+    );
+}
