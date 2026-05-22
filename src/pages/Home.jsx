@@ -73,7 +73,14 @@ export default function Home({ initialTab }) {
 
     const { data: serverTranslations = [] } = useQuery({
         queryKey: ['translations'],
-        queryFn: () => base44.entities.Translation.list('-created_date', 50),
+        queryFn: async () => {
+            try {
+                return await base44.entities.Translation.list('-created_date', 50);
+            } catch (err) {
+                console.log('Translation list error (likely not authenticated):', err);
+                return [];
+            }
+        },
         enabled: isOnline,
     });
 
@@ -212,9 +219,16 @@ Réponds uniquement avec le JSON demandé.`,
 
         setCurrentTranslation(translationData);
         saveToOfflineCache(translationData); // always cache locally
-        await createMutation.mutateAsync(translationData);
-        
-        toast.success("Traduction enregistrée !");
+
+        // Try to save to server (if authenticated), but don't block on failure
+        try {
+            await createMutation.mutateAsync(translationData);
+            toast.success("Traduction enregistree !");
+        } catch (err) {
+            console.log('Could not save to server (guest mode?):', err);
+            toast.success("Traduction enregistree localement !");
+        }
+
         setIsTranslating(false);
         setWord('');
     };

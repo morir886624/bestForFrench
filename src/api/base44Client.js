@@ -1,14 +1,20 @@
-import { createClient } from '@base44/sdk';
-import { appParams } from '@/lib/app-params';
+// Re-export the new Supabase-based API for backward compatibility
+import { api, supabase } from './supabaseApi';
+export { supabase };
 
-const { appId, token, functionsVersion, appBaseUrl } = appParams;
+// For backward compatibility with base44 SDK pattern
+export const base44 = {
+  auth: api.auth,
+  entities: api.entities,
+  integrations: {
+    Core: {
+      InvokeLLM: async (params) => {
+        const { invokeLLM } = await import('./llmService');
+        const result = await invokeLLM(params.prompt, params.response_json_schema);
+        return result;
+      }
+    }
+  }
+};
 
-//Create a client with authentication required
-export const base44 = createClient({
-  appId,
-  token,
-  functionsVersion,
-  serverUrl: '',
-  requiresAuth: false,
-  appBaseUrl
-});
+export default base44;
