@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Timer, Zap, Trophy, RotateCcw, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { getCachedContent, setCachedContent } from "@/utils/aiContentCache";
 
 function shuffle(arr) {
     return [...arr].sort(() => Math.random() - 0.5);
@@ -34,37 +35,70 @@ export default function TimedChallenge({ level = 'all', onResult }) {
     const [options, setOptions] = useState([]);
     const timerRef = useRef(null);
 
-    const loadWords = async () => {
+    const loadWords = async (forceRefresh = false) => {
         setPhase('loading');
-        const result = await base44.integrations.Core.InvokeLLM({
-            prompt: `Génère exactement 30 paires de mots français-persan de niveau ${level === 'all' ? 'varié (A1 à C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
-Respecte strictement le niveau ${level}. Chaque paire : un mot français + sa traduction persane (script persan) + translittération.`,
-            response_json_schema: {
-                type: "object",
-                properties: {
-                    pairs: {
-                        type: "array",
-                        items: {
-                            type: "object",
-                            properties: {
-                                fr: { type: "string" },
-                                fa: { type: "string" },
-                                pronunciation: { type: "string" }
-                            },
-                            required: ["fr", "fa"]
-                        }
-                    }
-                },
-                required: ["pairs"]
+
+        // Check cache first
+        if (!forceRefresh) {
+            const cachedPairs = getCachedContent('timed_challenge', level);
+            if (cachedPairs && cachedPairs.length > 0) {
+                console.log('Using cached timed challenge words for level:', level);
+                const normalized = cachedPairs.map((p, i) => ({
+                    id: `tc-${i}`,
+                    fr: p.fr,
+                    fa: p.fa,
+                    pronunciation: p.pronunciation || '',
+                }));
+                setWords(shuffle(normalized));
+                setPhase('idle');
+                return;
             }
-        });
-        const normalized = (result.pairs || []).map((p, i) => ({
+        }
+
+        let result;
+        try {
+            result = await base44.integrations.Core.InvokeLLM({
+                prompt: `Genere exactement 30 paires de mots francais-persan de niveau ${level === 'all' ? 'varie (A1 a C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
+Respecte strictement le niveau ${level}. Chaque paire : un mot francais + sa traduction persane (script persan) + translitteration.`,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        pairs: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    fr: { type: "string" },
+                                    fa: { type: "string" },
+                                    pronunciation: { type: "string" }
+                                },
+                                required: ["fr", "fa"]
+                            }
+                        }
+                    },
+                    required: ["pairs"]
+                }
+            });
+        } catch (err) {
+            console.error("Timed challenge word generation error:", err);
+            toast.error("Impossible de charger le defi. Verifiez votre cle API.");
+            setPhase('idle');
+            return;
+        }
+
+        const normalized = (result?.pairs || []).map((p, i) => ({
             id: `tc-${i}`,
             fr: p.fr,
             fa: p.fa,
             pronunciation: p.pronunciation || '',
         }));
         setWords(shuffle(normalized));
+
+        // Cache the generated content
+        if (result?.pairs && result.pairs.length > 0) {
+            setCachedContent('timed_challenge', level, '', result.pairs);
+        }
+
         setPhase('idle');
     };
 

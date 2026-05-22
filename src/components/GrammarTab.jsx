@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import SectionHistory from "@/components/history/SectionHistory";
 import ExportToSheetsButton from "@/components/ExportToSheetsButton";
+import { getCachedContent, setCachedContent } from "@/utils/aiContentCache";
 import { appendToSheet, isSheetsConfigured } from "@/lib/googleSheets";
 
 const LEVELS = [
@@ -36,62 +37,88 @@ export default function GrammarTab({ appLang }) {
         base44.auth.me().then(setCurrentUser).catch(() => {});
     }, []);
 
-    const fetchLessons = async () => {
+    const fetchLessons = async (forceRefresh = false) => {
         setIsLoading(true);
         setLessons([]);
         setCurrentIndex(0);
         setLessonDone(false);
 
-        const result = await base44.integrations.Core.InvokeLLM({
-            prompt: `Génère 5 fiches de grammaire française de niveau ${selectedLevel} pour un apprenant persanophone.
+        // Check cache first
+        if (!forceRefresh) {
+            const cachedLessons = getCachedContent('grammar', selectedLevel);
+            if (cachedLessons && cachedLessons.length > 0) {
+                console.log('Using cached grammar lessons for level:', selectedLevel);
+                setLessons(cachedLessons);
+                setIsLoading(false);
+                return;
+            }
+        }
+
+        let result;
+        try {
+            result = await base44.integrations.Core.InvokeLLM({
+                prompt: `Genere 5 fiches de grammaire francaise de niveau ${selectedLevel} pour un apprenant persanophone.
 Chaque fiche doit contenir :
-1. Le point de grammaire en français (ex: "Le présent de l'indicatif")
+1. Le point de grammaire en francais (ex: "Le present de l'indicatif")
 2. La traduction persane du titre
-3. Une explication claire en français
-4. La même explication traduite en persan (فارسی)
-5. La règle principale en français (1-2 phrases)
-6. La même règle traduite en persan
-7. 2 exemples en français avec leur traduction persane
-8. Un point d'attention / erreur fréquente en français
-9. Ce même point d'attention traduit en persan
+3. Une explication claire en francais
+4. La meme explication traduite en persan (فارسی)
+5. La regle principale en francais (1-2 phrases)
+6. La meme regle traduite en persan
+7. 2 exemples en francais avec leur traduction persane
+8. Un point d'attention / erreur frequente en francais
+9. Ce meme point d'attention traduit en persan
 
 Niveau ${selectedLevel}: ${level?.label}`,
-            response_json_schema: {
-                type: "object",
-                properties: {
-                    lessons: {
-                        type: "array",
-                        items: {
-                            type: "object",
-                            properties: {
-                                            title: { type: "string", description: "Point de grammaire en français" },
-                                            title_fa: { type: "string", description: "Titre en persan" },
-                                            explanation: { type: "string", description: "Explication en français" },
-                                            explanation_fa: { type: "string", description: "Explication traduite en persan" },
-                                            rule: { type: "string", description: "Règle principale en français" },
-                                            rule_fa: { type: "string", description: "Règle principale traduite en persan" },
-                                            examples: {
-                                                type: "array",
-                                                items: {
-                                                    type: "object",
-                                                    properties: {
-                                                        fr: { type: "string" },
-                                                        fa: { type: "string" }
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        lessons: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                                title: { type: "string", description: "Point de grammaire en francais" },
+                                                title_fa: { type: "string", description: "Titre en persan" },
+                                                explanation: { type: "string", description: "Explication en francais" },
+                                                explanation_fa: { type: "string", description: "Explication traduite en persan" },
+                                                rule: { type: "string", description: "Regle principale en francais" },
+                                                rule_fa: { type: "string", description: "Regle principale traduite en persan" },
+                                                examples: {
+                                                    type: "array",
+                                                    items: {
+                                                        type: "object",
+                                                        properties: {
+                                                            fr: { type: "string" },
+                                                            fa: { type: "string" }
+                                                        }
                                                     }
-                                                }
+                                                },
+                                                tip: { type: "string", description: "Erreur frequente ou astuce en francais" },
+                                                tip_fa: { type: "string", description: "Astuce traduite en persan" }
                                             },
-                                            tip: { type: "string", description: "Erreur fréquente ou astuce en français" },
-                                            tip_fa: { type: "string", description: "Astuce traduite en persan" }
-                                        },
-                                        required: ["title", "title_fa", "explanation", "explanation_fa", "rule", "rule_fa", "examples", "tip", "tip_fa"]
+                                            required: ["title", "title_fa", "explanation", "explanation_fa", "rule", "rule_fa", "examples", "tip", "tip_fa"]
                         }
                     }
                 },
                 required: ["lessons"]
             }
-        });
+            });
+        } catch (err) {
+            console.error("Grammar generation error:", err);
+            toast.error("Impossible de generer les fiches. Verifiez votre cle API.");
+            setIsLoading(false);
+            return;
+        }
 
-        setLessons(result.lessons || []);
+        const generatedLessons = result?.lessons || [];
+        setLessons(generatedLessons);
+
+        // Cache the generated content
+        if (generatedLessons.length > 0) {
+            setCachedContent('grammar', selectedLevel, '', generatedLessons);
+        }
+
         setIsLoading(false);
     };
 

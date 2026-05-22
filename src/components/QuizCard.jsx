@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Loader2, Lightbulb, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const QUIZ_TOPICS = [
     'les animaux', 'la nourriture', 'les couleurs', 'les chiffres', 'la famille',
@@ -106,8 +107,13 @@ Une phrase avec un mot manqué (persan affiché), à compléter en français. Va
             };
         }
 
-        const result = await base44.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
-        setQuestion({ ...result, topic, type: quizType });
+        try {
+            const result = await base44.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+            setQuestion({ ...result, topic, type: quizType });
+        } catch (err) {
+            console.error("Quiz generation error:", err);
+            toast.error("Impossible de generer la question. Verifiez votre cle API.");
+        }
         setIsLoading(false);
     };
 

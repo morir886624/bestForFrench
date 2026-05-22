@@ -167,25 +167,39 @@ export default function Home({ initialTab }) {
             return;
         }
 
-        const result = await base44.integrations.Core.InvokeLLM({
-            prompt: `Traduis le mot/phrase "${word}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}.
-            
+        let result;
+        try {
+            result = await base44.integrations.Core.InvokeLLM({
+                prompt: `Traduis le mot/phrase "${word}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}.
+
 Fournis:
 1. La traduction (dans l'alphabet de la langue cible)
 2. La prononciation (translittération si applicable)
 3. Une définition courte en français
 
 Réponds uniquement avec le JSON demandé.`,
-            response_json_schema: {
-                type: "object",
-                properties: {
-                    translation: { type: "string", description: "Traduction" },
-                    pronunciation: { type: "string", description: "Prononciation/translittération" },
-                    definition: { type: "string", description: "Définition en français" }
-                },
-                required: ["translation", "pronunciation", "definition"]
-            }
-        });
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        translation: { type: "string", description: "Traduction" },
+                        pronunciation: { type: "string", description: "Prononciation/translittération" },
+                        definition: { type: "string", description: "Définition en français" }
+                    },
+                    required: ["translation", "pronunciation", "definition"]
+                }
+            });
+        } catch (err) {
+            console.error("Translation error:", err);
+            toast.error("Erreur de traduction. Verifiez votre connexion ou cle API.");
+            setIsTranslating(false);
+            return;
+        }
+
+        if (!result) {
+            toast.error("Impossible d'obtenir la traduction.");
+            setIsTranslating(false);
+            return;
+        }
 
         const translationData = {
             original_word: word.trim(),
@@ -218,15 +232,20 @@ Réponds uniquement avec le JSON demandé.`,
             return;
         }
         setIsPreviewLoading(true);
-        const t = setTimeout(async () => {
-            const result = await base44.integrations.Core.InvokeLLM({
-                prompt: `Traduis "${val}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}. Réponds UNIQUEMENT avec la traduction, rien d'autre.`,
-                response_json_schema: { type: "object", properties: { translation: { type: "string" } } }
-            });
-            setLivePreview(result.translation || '');
+        const timeoutId = setTimeout(async () => {
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({
+                    prompt: `Traduis "${val}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}. Reponds UNIQUEMENT avec la traduction, rien d'autre.`,
+                    response_json_schema: { type: "object", properties: { translation: { type: "string" } } }
+                });
+                setLivePreview(result?.translation || '');
+            } catch (err) {
+                console.error("Live preview error:", err);
+                // Silent fail for live preview - don't show toast
+            }
             setIsPreviewLoading(false);
         }, 600);
-        setPreviewTimeout(t);
+        setPreviewTimeout(timeoutId);
     };
 
     const handleKeyPress = (e) => {
@@ -312,7 +331,7 @@ Réponds uniquement avec le JSON demandé.`,
                                         label="Exporter"
                                         rows={[
                                             ['Mot', 'Traduction', 'Prononciation', 'Définition', 'Langue source', 'Langue cible'],
-                                            ...recentTranslations.map(t => [t.original_word, t.persian_translation, t.pronunciation || '', t.definition || '', t.source_language || '', t.target_language || ''])
+                                            ...recentTranslations.map(tr => [tr.original_word, tr.persian_translation, tr.pronunciation || '', tr.definition || '', tr.source_language || '', tr.target_language || ''])
                                         ]}
                                     />
                                     </div>

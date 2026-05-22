@@ -12,6 +12,7 @@ import { useSpeech } from "@/hooks/useSpeech";
 import SpeakButton from "@/components/SpeakButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { getCachedContent, setCachedContent } from "@/utils/aiContentCache";
 
 function shuffle(arr) {
     return [...arr].sort(() => Math.random() - 0.5);
@@ -32,45 +33,80 @@ function useAIExercises(level) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const generate = async () => {
+    const generate = async (forceRefresh = false) => {
         setIsLoading(true);
         setError(null);
         setWords([]);
-        const result = await base44.integrations.Core.InvokeLLM({
-            prompt: `Génère exactement 10 paires de mots français-persan de niveau ${level === 'all' ? 'varié (A1 à C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
-Chaque paire doit avoir :
-- un mot français adapté strictement au niveau ${level}
-- sa traduction en persan (script persan)
-- sa translittération/prononciation
 
-IMPORTANT : respecte strictement le niveau ${level}. Ne génère pas de mots trop simples pour un niveau avancé ni trop complexes pour un niveau débutant.`,
-            response_json_schema: {
-                type: "object",
-                properties: {
-                    pairs: {
-                        type: "array",
-                        items: {
-                            type: "object",
-                            properties: {
-                                fr: { type: "string" },
-                                fa: { type: "string" },
-                                pronunciation: { type: "string" }
-                            },
-                            required: ["fr", "fa"]
-                        }
-                    }
-                },
-                required: ["pairs"]
+        // Check cache first
+        if (!forceRefresh) {
+            const cachedWords = getCachedContent('exercises', level);
+            if (cachedWords && cachedWords.length > 0) {
+                console.log('Using cached exercises for level:', level);
+                // Convert cached format back to expected shape
+                const normalized = cachedWords.map((p, i) => ({
+                    id: `ai-${i}`,
+                    original_word: p.fr,
+                    persian_translation: p.fa,
+                    pronunciation: p.pronunciation || '',
+                }));
+                setWords(normalized);
+                setIsLoading(false);
+                return;
             }
-        });
+        }
+
+        let result;
+        try {
+            result = await base44.integrations.Core.InvokeLLM({
+                prompt: `Genere exactement 10 paires de mots francais-persan de niveau ${level === 'all' ? 'varie (A1 a C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
+Chaque paire doit avoir :
+- un mot francais adapte strictement au niveau ${level}
+- sa traduction en persan (script persan)
+- sa translitteration/prononciation
+
+IMPORTANT : respecte strictement le niveau ${level}. Ne genere pas de mots trop simples pour un niveau avance ni trop complexes pour un niveau debutant.`,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        pairs: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    fr: { type: "string" },
+                                    fa: { type: "string" },
+                                    pronunciation: { type: "string" }
+                                },
+                                required: ["fr", "fa"]
+                            }
+                        }
+                    },
+                    required: ["pairs"]
+                }
+            });
+        } catch (err) {
+            console.error("Exercise generation error:", err);
+            toast.error("Impossible de generer les exercices. Verifiez votre cle API.");
+            setError(err);
+            setIsLoading(false);
+            return;
+        }
+
         // Normalize to the shape expected by exercises
-        const normalized = (result.pairs || []).map((p, i) => ({
+        const normalized = (result?.pairs || []).map((p, i) => ({
             id: `ai-${i}`,
             original_word: p.fr,
             persian_translation: p.fa,
             pronunciation: p.pronunciation || '',
         }));
         setWords(normalized);
+
+        // Cache the generated content (store in simple format)
+        if (result?.pairs && result.pairs.length > 0) {
+            setCachedContent('exercises', level, '', result.pairs);
+        }
+
         setIsLoading(false);
     };
 

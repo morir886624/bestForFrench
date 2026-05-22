@@ -104,40 +104,50 @@ export default function VocabListManager({ translations, targetLanguage, languag
         if (!translations.length) { toast.error("Aucun historique de traduction disponible."); return; }
         setSuggestingWords(true);
         const existingWords = (list.words || []).map(w => w.original).join(', ');
-        const historyWords = translations.slice(0, 30).map(t => t.original_word).join(', ');
-        const result = await base44.integrations.Core.InvokeLLM({
-            prompt: `Tu es un assistant pédagogique. L'utilisateur apprend le ${languageNames[targetLanguage]}.
+        const historyWords = translations.slice(0, 30).map(tr => tr.original_word).join(', ');
+
+        let result;
+        try {
+            result = await base44.integrations.Core.InvokeLLM({
+                prompt: `Tu es un assistant pedagogique. L'utilisateur apprend le ${languageNames[targetLanguage]}.
 Liste actuelle: ${existingWords || 'vide'}.
 Historique de traduction: ${historyWords}.
-Suggère 5 mots à ajouter à cette liste, en cohérence thématique avec les mots déjà présents et l'historique. 
-Pour chaque mot, donne: mot en français, traduction en ${languageNames[targetLanguage]}, prononciation, définition courte.`,
-            response_json_schema: {
-                type: "object",
-                properties: {
-                    suggestions: {
-                        type: "array",
-                        items: {
-                            type: "object",
-                            properties: {
-                                original: { type: "string" },
-                                translation: { type: "string" },
-                                pronunciation: { type: "string" },
-                                definition: { type: "string" },
+Suggere 5 mots a ajouter a cette liste, en coherence thematique avec les mots deja presents et l'historique.
+Pour chaque mot, donne: mot en francais, traduction en ${languageNames[targetLanguage]}, prononciation, definition courte.`,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        suggestions: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    original: { type: "string" },
+                                    translation: { type: "string" },
+                                    pronunciation: { type: "string" },
+                                    definition: { type: "string" },
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        } catch (err) {
+            console.error("Word suggestion error:", err);
+            toast.error("Impossible de suggerer des mots. Verifiez votre cle API.");
+            setSuggestingWords(false);
+            return;
+        }
+
         // Add all suggested words to the list
-        const newWords = (result.suggestions || []).filter(s =>
+        const newWords = (result?.suggestions || []).filter(s =>
             !(list.words || []).some(w => w.original === s.original)
         );
         if (newWords.length) {
             await updateListMutation.mutateAsync({ id: list.id, data: { words: [...(list.words || []), ...newWords] } });
-            toast.success(`${newWords.length} mot(s) suggérés ajoutés !`);
+            toast.success(`${newWords.length} mot(s) suggere(s) ajoute(s) !`);
         } else {
-            toast.info("Aucun nouveau mot suggéré.");
+            toast.info("Aucun nouveau mot suggere.");
         }
         setSuggestingWords(false);
     };

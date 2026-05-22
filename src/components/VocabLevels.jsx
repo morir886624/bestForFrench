@@ -10,6 +10,7 @@ import SpeakButton from "@/components/SpeakButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { appendToSheet, isSheetsConfigured } from "@/lib/googleSheets";
+import { getCachedContent, setCachedContent } from "@/utils/aiContentCache";
 
 const LEVELS = [
     { id: 'A1', label: 'A1 – Débutant', color: 'bg-green-100 text-green-700 border-green-200', bg: 'from-green-50 to-emerald-50', border: 'border-green-100', desc: 'Mots du quotidien très simples' },
@@ -81,12 +82,26 @@ export default function VocabLevels({ targetLanguage, languageNames }) {
         base44.auth.me().then(setCurrentUser).catch(() => {});
     }, []);
 
-    const fetchWords = async () => {
+    const fetchWords = async (forceRefresh = false) => {
         setIsLoading(true);
         setWords([]);
         setCurrentIndex(0);
         setLessonDone(false);
-        const result = await base44.integrations.Core.InvokeLLM({
+
+        // Check cache first
+        if (!forceRefresh) {
+            const cachedWords = getCachedContent('vocab', selectedLevel, languageNames[targetLanguage] || 'persan');
+            if (cachedWords && cachedWords.length > 0) {
+                console.log('Using cached vocab for level:', selectedLevel);
+                setWords(cachedWords);
+                setIsLoading(false);
+                return;
+            }
+        }
+
+        let result;
+        try {
+            result = await base44.integrations.Core.InvokeLLM({
             prompt: `Génère exactement 10 mots français de niveau ${selectedLevel} (${level.desc}) avec pour chacun :
 - le mot français
 - sa définition simple en français (1 phrase)
@@ -118,7 +133,21 @@ Assure-toi que les 10 mots sont variés et correspondent bien au niveau ${select
                 required: ["words"]
             }
         });
-        setWords(result.words || []);
+        } catch (err) {
+            console.error("Vocab generation error:", err);
+            toast.error("Impossible de generer le vocabulaire. Verifiez votre cle API.");
+            setIsLoading(false);
+            return;
+        }
+
+        const generatedWords = result?.words || [];
+        setWords(generatedWords);
+
+        // Cache the generated content
+        if (generatedWords.length > 0) {
+            setCachedContent('vocab', selectedLevel, languageNames[targetLanguage] || 'persan', generatedWords);
+        }
+
         setIsLoading(false);
     };
 

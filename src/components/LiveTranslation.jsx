@@ -31,16 +31,22 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
             }
             setIsTranslating(true);
             setSaved(false);
-            const result = await base44.integrations.Core.InvokeLLM({
-                prompt: `Traduis "${text}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}. Réponds UNIQUEMENT avec la traduction, rien d'autre.`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        translation: { type: "string" }
+
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({
+                    prompt: `Traduis "${text}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}. Reponds UNIQUEMENT avec la traduction, rien d'autre.`,
+                    response_json_schema: {
+                        type: "object",
+                        properties: {
+                            translation: { type: "string" }
+                        }
                     }
-                }
-            });
-            setTranslation(result.translation || '');
+                });
+                setTranslation(result?.translation || '');
+            } catch (err) {
+                console.error("Live translation error:", err);
+                // Silent fail for live translation - don't show toast
+            }
             setIsTranslating(false);
         }, 500),
         [sourceLanguage, targetLanguage, languageNames]
@@ -73,26 +79,34 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
         setIsSaving(true);
 
         // Get pronunciation + definition via a second LLM call
-        const details = await base44.integrations.Core.InvokeLLM({
-            prompt: `Pour le mot/phrase "${inputText}" en ${languageNames[sourceLanguage]}, dont la traduction en ${languageNames[targetLanguage]} est "${translation}":
-1. Donne la prononciation/translittération de la traduction
-2. Donne une courte définition en français`,
-            response_json_schema: {
-                type: "object",
-                properties: {
-                    pronunciation: { type: "string" },
-                    definition: { type: "string" }
+        let details;
+        try {
+            details = await base44.integrations.Core.InvokeLLM({
+                prompt: `Pour le mot/phrase "${inputText}" en ${languageNames[sourceLanguage]}, dont la traduction en ${languageNames[targetLanguage]} est "${translation}":
+1. Donne la prononciation/translitteration de la traduction
+2. Donne une courte definition en francais`,
+                response_json_schema: {
+                    type: "object",
+                    properties: {
+                        pronunciation: { type: "string" },
+                        definition: { type: "string" }
+                    }
                 }
-            }
-        });
+            });
+        } catch (err) {
+            console.error("Details generation error:", err);
+            toast.error("Erreur lors de la recuperation des details.");
+            setIsSaving(false);
+            return;
+        }
 
         const translationData = {
             original_word: inputText.trim(),
             source_language: languageNames[sourceLanguage],
             target_language: languageNames[targetLanguage],
             persian_translation: translation,
-            pronunciation: details.pronunciation || '',
-            definition: details.definition || '',
+            pronunciation: details?.pronunciation || '',
+            definition: details?.definition || '',
         };
 
         await base44.entities.Translation.create(translationData);
@@ -101,7 +115,7 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
 
         setSaved(true);
         setIsSaving(false);
-        toast.success("Traduction enregistrée dans l'historique !");
+        toast.success("Traduction enregistree dans l'historique !");
     };
 
     return (
