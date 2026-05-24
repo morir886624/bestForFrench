@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
     Languages, Target, Zap, Award, BookOpen, Star, Brain,
     Settings as SettingsIcon, Key, Check, Eye, EyeOff, Info,
-    RotateCcw, History, BarChart2, AlertTriangle, Trash2, UserX
+    RotateCcw, History, BarChart2, AlertTriangle, Trash2, UserX, Loader2
 } from "lucide-react";
 import DailyReminder from "@/components/DailyReminder";
 import GoogleSheetsSettings from "@/components/GoogleSheetsSettings";
@@ -93,12 +93,63 @@ export default function Profile() {
     };
     const maskedKey = savedKey ? savedKey.slice(0, 6) + '••••••••••••' + savedKey.slice(-4) : '';
 
-    const handleSaveKey = () => {
-        if (!apiKey.trim()) { toast.error("Veuillez entrer une clé API valide."); return; }
-        localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
-        setSavedKey(apiKey.trim());
-        setSaved(true);
-        toast.success("Clé API enregistrée !");
+    const [isValidating, setIsValidating] = useState(false);
+    const [validationStatus, setValidationStatus] = useState(null); // null | 'valid' | 'invalid' | 'no_credits'
+
+    const handleSaveKey = async () => {
+        if (!apiKey.trim()) { toast.error("Veuillez entrer une cle API valide."); return; }
+
+        setIsValidating(true);
+        setValidationStatus(null);
+
+        try {
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invoke-llm`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                    'Apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                },
+                body: JSON.stringify({
+                    prompt: 'Reponds juste "ok" en JSON.',
+                    response_json_schema: { type: 'object', properties: { status: { type: 'string' } } },
+                    api_key: apiKey.trim(),
+                })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && !data.error) {
+                localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
+                setSavedKey(apiKey.trim());
+                setSaved(true);
+                setValidationStatus('valid');
+                toast.success("Cle API valide et enregistree !");
+            } else {
+                const errMsg = data.error || 'Erreur inconnue';
+                if (errMsg.includes('invalide') || errMsg.includes('401')) {
+                    setValidationStatus('invalid');
+                    toast.error("Cle API invalide. Verifiez que vous avez copie la bonne cle.");
+                } else if (errMsg.includes('credits') || errMsg.includes('quota') || errMsg.includes('paiement') || errMsg.includes('Limite')) {
+                    localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
+                    setSavedKey(apiKey.trim());
+                    setValidationStatus('no_credits');
+                    toast.warning("Cle enregistree mais votre compte OpenAI n'a pas de credits. Ajoutez un moyen de paiement sur platform.openai.com/account/billing");
+                } else {
+                    localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
+                    setSavedKey(apiKey.trim());
+                    setSaved(true);
+                    toast.warning("Cle enregistree mais erreur: " + errMsg);
+                }
+            }
+        } catch (err) {
+            localStorage.setItem(API_KEY_STORAGE, apiKey.trim());
+            setSavedKey(apiKey.trim());
+            setSaved(true);
+            toast.warning("Cle enregistree. Impossible de verifier en ligne.");
+        }
+
+        setIsValidating(false);
         setTimeout(() => setSaved(false), 2000);
     };
 
@@ -313,9 +364,39 @@ export default function Profile() {
                                     </button>
                                 </div>
                             </div>
-                            <Button onClick={handleSaveKey} disabled={!apiKey.trim() || apiKey === savedKey} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
-                                {saved ? <><Check className="h-4 w-4 mr-2" /> Enregistrée !</> : 'Enregistrer la clé API'}
+                            <Button onClick={handleSaveKey} disabled={!apiKey.trim() || apiKey === savedKey || isValidating} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                                {isValidating ? (
+                                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Verification...</>
+                                ) : saved ? (
+                                    <><Check className="h-4 w-4 mr-2" /> Enregistree !</>
+                                ) : 'Enregistrer et verifier la cle API'}
                             </Button>
+                            {validationStatus === 'valid' && (
+                                <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-3 rounded-xl">
+                                    <Check className="h-4 w-4" />
+                                    <span>Cle API valide ! Les traductions fonctionnent.</span>
+                                </div>
+                            )}
+                            {validationStatus === 'invalid' && (
+                                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-xl">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <span>Cle API invalide. Verifiez que votre cle commence par sk- et est copiee correctement.</span>
+                                </div>
+                            )}
+                            {validationStatus === 'no_credits' && (
+                                <div className="space-y-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                                    <div className="flex items-center gap-2 text-sm text-amber-700">
+                                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                                        <span className="font-medium">Votre compte OpenAI n'a pas de credits</span>
+                                    </div>
+                                    <p className="text-xs text-amber-600">Les comptes OpenAI gratuits n'ont pas acces a l'API. Vous devez :</p>
+                                    <ol className="text-xs text-amber-700 list-decimal list-inside space-y-1">
+                                        <li>Aller sur <strong>platform.openai.com/account/billing</strong></li>
+                                        <li>Ajouter un moyen de paiement (carte bancaire)</li>
+                                        <li>Ajouter au moins 5$ de credits</li>
+                                    </ol>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </motion.div>
