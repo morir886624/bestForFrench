@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { translateText as freeTranslate } from '@/api/llmService';
 import SectionHistory from "@/components/history/SectionHistory";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,69 @@ const LEVELS = [
     { id: 'B2', label: 'B2 – Avancé', color: 'bg-purple-100 text-purple-700 border-purple-200', bg: 'from-purple-50 to-violet-50', border: 'border-purple-100', desc: 'Expressions idiomatiques' },
     { id: 'C1', label: 'C1 – Expert', color: 'bg-rose-100 text-rose-700 border-rose-200', bg: 'from-rose-50 to-pink-50', border: 'border-rose-100', desc: 'Vocabulaire soutenu et littéraire' },
 ];
+
+const BUILT_IN_WORDS = {
+  A1: [
+    { word: 'Bonjour', definition: 'Salutation pour dire bonjour', example_fr: 'Bonjour, comment allez-vous ?' },
+    { word: 'Merci', definition: 'Expression de gratitude', example_fr: 'Merci pour votre aide.' },
+    { word: 'Maison', definition: 'Lieu où on habite', example_fr: 'Ma maison est grande.' },
+    { word: 'Eau', definition: 'Liquide transparent essentiel à la vie', example_fr: 'Je veux boire de l\'eau.' },
+    { word: 'Pain', definition: 'Aliment de base fait de farine', example_fr: 'J\'achète du pain à la boulangerie.' },
+    { word: 'Famille', definition: 'Ensemble des parents et enfants', example_fr: 'Ma famille est grande.' },
+    { word: 'Ami', definition: 'Personne avec qui on a une relation amicale', example_fr: 'Mon ami s\'appelle Ali.' },
+    { word: 'Livre', definition: 'Ensemble de pages imprimées', example_fr: 'Je lis un livre.' },
+    { word: 'Chat', definition: 'Animal domestique qui miaule', example_fr: 'Le chat dort sur le canapé.' },
+    { word: 'Soleil', definition: 'Étoile qui éclaire la Terre', example_fr: 'Le soleil brille aujourd\'hui.' },
+  ],
+  A2: [
+    { word: 'Voyage', definition: 'Déplacement d\'un lieu à un autre', example_fr: 'Mon voyage en France était magnifique.' },
+    { word: 'Travail', definition: 'Activité professionnelle rémunérée', example_fr: 'Je vais au travail chaque matin.' },
+    { word: 'École', definition: 'Établissement d\'enseignement', example_fr: 'Les enfants vont à l\'école.' },
+    { word: 'Restaurant', definition: 'Lieu où on mange des repas préparés', example_fr: 'Nous dînons au restaurant.' },
+    { word: 'Voiture', definition: 'Véhicule à moteur pour se déplacer', example_fr: 'Sa voiture est rouge.' },
+    { word: 'Jardin', definition: 'Espace planté de fleurs et d\'arbres', example_fr: 'Le jardin est plein de fleurs.' },
+    { word: 'Musique', definition: 'Art combinant sons et rythmes', example_fr: 'J\'écoute de la musique le soir.' },
+    { word: 'Chaussures', definition: 'Vêtements pour les pieds', example_fr: 'Mes chaussures sont noires.' },
+    { word: 'Montagne', definition: 'Élévation naturelle du terrain', example_fr: 'La montagne est couverte de neige.' },
+    { word: 'Plage', definition: 'Étendue de sable au bord de la mer', example_fr: 'Nous allons à la plage en été.' },
+  ],
+  B1: [
+    { word: 'Emploi', definition: 'Poste de travail occupé par quelqu\'un', example_fr: 'Il cherche un emploi stable.' },
+    { word: 'Environnement', definition: 'Milieu naturel qui nous entoure', example_fr: 'Protégeons l\'environnement.' },
+    { word: 'Décision', definition: 'Choix fait après réflexion', example_fr: 'C\'est une décision importante.' },
+    { word: 'Expérience', definition: 'Connaissance acquise par la pratique', example_fr: 'Cette expérience m\'a beaucoup appris.' },
+    { word: 'Projet', definition: 'Plan d\'action pour l\'avenir', example_fr: 'Notre projet est ambitieux.' },
+    { word: 'Société', definition: 'Ensemble des personnes vivant en communauté', example_fr: 'La société évolue rapidement.' },
+    { word: 'Culture', definition: 'Ensemble des coutumes et traditions', example_fr: 'La culture persane est riche.' },
+    { word: 'Liberté', definition: 'État de ne pas être soumis à une contrainte', example_fr: 'La liberté est un droit fondamental.' },
+    { word: 'Patience', definition: 'Capacité d\'attendre sans s\'irriter', example_fr: 'La patience est une vertu.' },
+    { word: 'Confiance', definition: 'Sentiment de sécurité envers quelqu\'un', example_fr: 'J\'ai confiance en toi.' },
+  ],
+  B2: [
+    { word: 'Ambiguïté', definition: 'Caractère de ce qui a plusieurs sens', example_fr: 'L\'ambiguïté de cette phrase est intentionnelle.' },
+    { word: 'Consensus', definition: 'Accord général entre plusieurs personnes', example_fr: 'Un consensus s\'est dégagé lors du débat.' },
+    { word: 'Paradoxe', definition: 'Affirmation qui semble se contredire', example_fr: 'C\'est un paradoxe fascinant.' },
+    { word: 'Persévérance', definition: 'Qualité de celui qui persiste malgré les obstacles', example_fr: 'Sa persévérance a payé.' },
+    { word: 'Résilience', definition: 'Capacité à se remettre d\'un traumatisme', example_fr: 'Sa résilience est admirable.' },
+    { word: 'Empathie', definition: 'Capacité de comprendre les sentiments d\'autrui', example_fr: 'L\'empathie rend les relations plus profondes.' },
+    { word: 'Nuance', definition: 'Différence subtile entre deux choses', example_fr: 'Il faut saisir les nuances du texte.' },
+    { word: 'Pragmatisme', definition: 'Attitude qui privilégie l\'action efficace', example_fr: 'Son pragmatisme résout les problèmes rapidement.' },
+    { word: 'Héritage', definition: 'Ce qui est transmis du passé', example_fr: 'Cet héritage culturel est précieux.' },
+    { word: 'Remise en question', definition: 'Action de douter de ses certitudes', example_fr: 'La remise en question est essentielle pour progresser.' },
+  ],
+  C1: [
+    { word: 'Dialectique', definition: 'Art de la discussion par thèse et antithèse', example_fr: 'La dialectique hégélienne influence la philosophie moderne.' },
+    { word: 'Épistémologie', definition: 'Étude critique des sciences et de leurs fondements', example_fr: 'L\'épistémologie questionne la nature du savoir.' },
+    { word: 'Herméneutique', definition: 'Art de l\'interprétation des textes', example_fr: 'L\'herméneutique biblique est un champ d\'étude ancien.' },
+    { word: 'Subversion', definition: 'Action de renverser l\'ordre établi', example_fr: 'La subversion est au cœur de cette œuvre littéraire.' },
+    { word: 'Invariant', definition: 'Ce qui reste constant malgré les transformations', example_fr: 'Cet invariant mathématique est remarquable.' },
+    { word: 'Dissonance', definition: 'Manque d\'harmonie entre des éléments', example_fr: 'La dissonance cognitive engendre l\'inconfort.' },
+    { word: 'Ontologie', definition: 'Branche de la philosophie étudiant l\'être', example_fr: 'L\'ontologie de Heidegger est complexe.' },
+    { word: 'Vicariance', definition: 'Capacité d\'un système à remplacer un autre', example_fr: 'La vicariance neuronale permet l\'adaptation.' },
+    { word: 'Prolepsis', definition: 'Figure de style consistant à anticiper un événement', example_fr: 'La prolepsis crée un effet de suspense.' },
+    { word: 'Atavisme', definition: 'Résurgence d\'un trait ancestral', example_fr: 'Cet atavisme rappelle nos origines lointaines.' },
+  ],
+};
 
 function downloadPDF(words, level, targetLang) {
     // Build a simple printable HTML page and trigger print-to-PDF
@@ -99,10 +163,12 @@ export default function VocabLevels({ targetLanguage, languageNames }) {
             }
         }
 
-        let result;
-        try {
-            result = await base44.integrations.Core.InvokeLLM({
-            prompt: `Génère exactement 10 mots français de niveau ${selectedLevel} (${level.desc}) avec pour chacun :
+        // Try OpenAI first if API key exists
+        const apiKey = localStorage.getItem('app_api_key');
+        if (apiKey) {
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({
+                    prompt: `Génère exactement 10 mots français de niveau ${selectedLevel} (${level.desc}) avec pour chacun :
 - le mot français
 - sa définition simple en français (1 phrase)
 - une phrase d'exemple en français
@@ -111,41 +177,68 @@ export default function VocabLevels({ targetLanguage, languageNames }) {
 - la prononciation/translittération du mot traduit
 
 Assure-toi que les 10 mots sont variés et correspondent bien au niveau ${selectedLevel}.`,
-            response_json_schema: {
-                type: "object",
-                properties: {
-                    words: {
-                        type: "array",
-                        items: {
-                            type: "object",
-                            properties: {
-                                word: { type: "string" },
-                                definition: { type: "string" },
-                                example_fr: { type: "string" },
-                                translation: { type: "string" },
-                                example_translated: { type: "string" },
-                                pronunciation: { type: "string" }
-                            },
-                            required: ["word", "definition", "example_fr", "translation", "example_translated", "pronunciation"]
-                        }
+                    response_json_schema: {
+                        type: "object",
+                        properties: {
+                            words: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        word: { type: "string" },
+                                        definition: { type: "string" },
+                                        example_fr: { type: "string" },
+                                        translation: { type: "string" },
+                                        example_translated: { type: "string" },
+                                        pronunciation: { type: "string" }
+                                    },
+                                    required: ["word", "definition", "example_fr", "translation", "example_translated", "pronunciation"]
+                                }
+                            }
+                        },
+                        required: ["words"]
                     }
-                },
-                required: ["words"]
+                });
+
+                const generatedWords = result?.words || [];
+                if (generatedWords.length > 0) {
+                    setWords(generatedWords);
+                    setCachedContent('vocab', selectedLevel, languageNames[targetLanguage] || 'persan', generatedWords);
+                    setIsLoading(false);
+                    return;
+                }
+            } catch (err) {
+                console.error("Vocab generation error (falling back to built-in):", err);
             }
-        });
-        } catch (err) {
-            console.error("Vocab generation error:", err);
-            toast.error(err.message || "Impossible de generer le vocabulaire. Verifiez votre cle API.");
-            setIsLoading(false);
-            return;
         }
 
-        const generatedWords = result?.words || [];
-        setWords(generatedWords);
-
-        // Cache the generated content
-        if (generatedWords.length > 0) {
-            setCachedContent('vocab', selectedLevel, languageNames[targetLanguage] || 'persan', generatedWords);
+        // Fallback: built-in words + free translation
+        try {
+            const builtIn = BUILT_IN_WORDS[selectedLevel] || BUILT_IN_WORDS.A1;
+            const targetLang = languageNames[targetLanguage] || 'persan';
+            const translatedWords = await Promise.all(
+                builtIn.map(async (w) => {
+                    const [wordTrans, exampleTrans] = await Promise.all([
+                        freeTranslate(w.word, 'Français', targetLang).catch(() => ''),
+                        freeTranslate(w.example_fr, 'Français', targetLang).catch(() => ''),
+                    ]);
+                    return {
+                        word: w.word,
+                        definition: w.definition,
+                        example_fr: w.example_fr,
+                        translation: wordTrans,
+                        example_translated: exampleTrans,
+                        pronunciation: '',
+                    };
+                })
+            );
+            setWords(translatedWords);
+            if (!apiKey) {
+                toast.info("Mode gratuit : vocabulaire prédéfini. Ajoutez une clé API pour du contenu IA illimité.");
+            }
+        } catch (err) {
+            console.error("Built-in vocab error:", err);
+            toast.error("Erreur lors du chargement du vocabulaire.");
         }
 
         setIsLoading(false);

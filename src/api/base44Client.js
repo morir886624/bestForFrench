@@ -1,19 +1,20 @@
 import { api, supabase } from './supabaseApi';
-import { invokeLLM } from './llmService';
+import { invokeLLM, translateText, getTranslationWithDetails } from './llmService';
 
 export { supabase };
 
-// For backward compatibility with base44 SDK pattern
 export const base44 = {
   auth: api.auth,
   entities: api.entities,
   integrations: {
     Core: {
-      InvokeLLM: async (params) => {
-        return invokeLLM(params.prompt, params.response_json_schema);
-      }
+      InvokeLLM: async (params) => invokeLLM(params.prompt, params.response_json_schema),
     }
-  }
+  },
+  // Free translation — works without API key
+  translate: translateText,
+  // Translation with details (free + optional OpenAI)
+  translateWithDetails: getTranslationWithDetails,
 };
 
 export default base44;

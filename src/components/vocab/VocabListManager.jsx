@@ -106,37 +106,60 @@ export default function VocabListManager({ translations, targetLanguage, languag
         const existingWords = (list.words || []).map(w => w.original).join(', ');
         const historyWords = translations.slice(0, 30).map(tr => tr.original_word).join(', ');
 
-        let result;
-        try {
-            result = await base44.integrations.Core.InvokeLLM({
-                prompt: `Tu es un assistant pedagogique. L'utilisateur apprend le ${languageNames[targetLanguage]}.
+        const apiKey = localStorage.getItem('app_api_key');
+        if (apiKey) {
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({
+                    prompt: `Tu es un assistant pedagogique. L'utilisateur apprend le ${languageNames[targetLanguage]}.
 Liste actuelle: ${existingWords || 'vide'}.
 Historique de traduction: ${historyWords}.
 Suggere 5 mots a ajouter a cette liste, en coherence thematique avec les mots deja presents et l'historique.
 Pour chaque mot, donne: mot en francais, traduction en ${languageNames[targetLanguage]}, prononciation, definition courte.`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        suggestions: {
-                            type: "array",
-                            items: {
-                                type: "object",
-                                properties: {
-                                    original: { type: "string" },
-                                    translation: { type: "string" },
-                                    pronunciation: { type: "string" },
-                                    definition: { type: "string" },
+                    response_json_schema: {
+                        type: "object",
+                        properties: {
+                            suggestions: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        original: { type: "string" },
+                                        translation: { type: "string" },
+                                        pronunciation: { type: "string" },
+                                        definition: { type: "string" },
+                                    }
                                 }
                             }
                         }
                     }
+                });
+                if (result?.suggestions) {
+                    setSuggestedWords(result.suggestions);
+                    setSuggestingWords(false);
+                    return;
                 }
-            });
+            } catch (err) {
+                console.error("Word suggestion error (falling back):", err);
+            }
+        }
+
+        // Fallback: suggest basic words via free translation
+        try {
+            const { translateText: freeTranslate } = await import('@/api/llmService');
+            const basicWords = ['Bonjour', 'Merci', 'Maison', 'Ami', 'Livre'];
+            const suggestions = await Promise.all(
+                basicWords.map(async (w) => {
+                    const trans = await freeTranslate(w, 'Français', languageNames[targetLanguage] || 'Persan').catch(() => '');
+                    return { original: w, translation: trans, pronunciation: '', definition: '' };
+                })
+            );
+            setSuggestedWords(suggestions);
+            if (!apiKey) {
+                toast.info("Mode gratuit. Ajoutez une clé API pour des suggestions IA.");
+            }
         } catch (err) {
-            console.error("Word suggestion error:", err);
-            toast.error(err.message || "Impossible de suggerer des mots. Verifiez votre cle API.");
-            setSuggestingWords(false);
-            return;
+            console.error("Fallback suggestion error:", err);
+            toast.error(err.message || "Impossible de suggerer des mots.");
         }
 
         // Add all suggested words to the list

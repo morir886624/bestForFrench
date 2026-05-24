@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { translateText as freeTranslate } from '@/api/llmService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SectionHistory from "@/components/history/SectionHistory";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,55 +57,80 @@ function useAIExercises(level) {
             }
         }
 
-        let result;
-        try {
-            result = await base44.integrations.Core.InvokeLLM({
-                prompt: `Genere exactement 10 paires de mots francais-persan de niveau ${level === 'all' ? 'varie (A1 a C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
+        // Try OpenAI first if API key exists
+        const apiKey = localStorage.getItem('app_api_key');
+        if (apiKey) {
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({
+                    prompt: `Genere exactement 10 paires de mots francais-persan de niveau ${level === 'all' ? 'varie (A1 a C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
 Chaque paire doit avoir :
 - un mot francais adapte strictement au niveau ${level}
 - sa traduction en persan (script persan)
 - sa translitteration/prononciation
 
-IMPORTANT : respecte strictement le niveau ${level}. Ne genere pas de mots trop simples pour un niveau avance ni trop complexes pour un niveau debutant.`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        pairs: {
-                            type: "array",
-                            items: {
-                                type: "object",
-                                properties: {
-                                    fr: { type: "string" },
-                                    fa: { type: "string" },
-                                    pronunciation: { type: "string" }
-                                },
-                                required: ["fr", "fa"]
+IMPORTANT : respecte strictement le niveau ${level}.`,
+                    response_json_schema: {
+                        type: "object",
+                        properties: {
+                            pairs: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        fr: { type: "string" },
+                                        fa: { type: "string" },
+                                        pronunciation: { type: "string" }
+                                    },
+                                    required: ["fr", "fa"]
+                                }
                             }
-                        }
-                    },
-                    required: ["pairs"]
+                        },
+                        required: ["pairs"]
+                    }
+                });
+
+                const normalized = (result?.pairs || []).map((p, i) => ({
+                    id: `ai-${i}`,
+                    original_word: p.fr,
+                    persian_translation: p.fa,
+                    pronunciation: p.pronunciation || '',
+                }));
+                if (normalized.length > 0) {
+                    setWords(normalized);
+                    if (result?.pairs) {
+                        setCachedContent('exercises', level, '', result.pairs);
+                    }
+                    setIsLoading(false);
+                    return;
                 }
-            });
-        } catch (err) {
-            console.error("Exercise generation error:", err);
-            toast.error(err.message || "Impossible de generer les exercices. Verifiez votre cle API.");
-            setError(err);
-            setIsLoading(false);
-            return;
+            } catch (err) {
+                console.error("Exercise generation error (falling back):", err);
+            }
         }
 
-        // Normalize to the shape expected by exercises
-        const normalized = (result?.pairs || []).map((p, i) => ({
-            id: `ai-${i}`,
-            original_word: p.fr,
-            persian_translation: p.fa,
-            pronunciation: p.pronunciation || '',
-        }));
-        setWords(normalized);
-
-        // Cache the generated content (store in simple format)
-        if (result?.pairs && result.pairs.length > 0) {
-            setCachedContent('exercises', level, '', result.pairs);
+        // Fallback: translate basic French words via free API
+        try {
+            const basicWords = ['Bonjour', 'Merci', 'Maison', 'Eau', 'Pain', 'Famille', 'Ami', 'Livre', 'Chat', 'Soleil'];
+            const pairs = await Promise.all(
+                basicWords.map(async (w) => {
+                    const fa = await freeTranslate(w, 'Français', 'Persan').catch(() => '');
+                    return { fr: w, fa, pronunciation: '' };
+                })
+            );
+            const normalized = pairs.map((p, i) => ({
+                id: `builtin-${i}`,
+                original_word: p.fr,
+                persian_translation: p.fa,
+                pronunciation: p.pronunciation || '',
+            }));
+            setWords(normalized);
+            if (!apiKey) {
+                toast.info("Mode gratuit : exercices de base. Ajoutez une clé API pour plus de contenu.");
+            }
+        } catch (err) {
+            console.error("Fallback exercise error:", err);
+            toast.error("Erreur lors du chargement des exercices.");
+            setError(err);
         }
 
         setIsLoading(false);

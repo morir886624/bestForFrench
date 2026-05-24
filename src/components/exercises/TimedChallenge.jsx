@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+import { translateText as freeTranslate } from '@/api/llmService';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,48 +56,77 @@ export default function TimedChallenge({ level = 'all', onResult }) {
             }
         }
 
-        let result;
-        try {
-            result = await base44.integrations.Core.InvokeLLM({
-                prompt: `Genere exactement 30 paires de mots francais-persan de niveau ${level === 'all' ? 'varie (A1 a C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
+        // Try OpenAI first if API key exists
+        const apiKey = localStorage.getItem('app_api_key');
+        if (apiKey) {
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({
+                    prompt: `Genere exactement 30 paires de mots francais-persan de niveau ${level === 'all' ? 'varie (A1 a C1)' : level} (${LEVEL_DESCRIPTIONS[level] || ''}).
 Respecte strictement le niveau ${level}. Chaque paire : un mot francais + sa traduction persane (script persan) + translitteration.`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        pairs: {
-                            type: "array",
-                            items: {
-                                type: "object",
-                                properties: {
-                                    fr: { type: "string" },
-                                    fa: { type: "string" },
-                                    pronunciation: { type: "string" }
-                                },
-                                required: ["fr", "fa"]
+                    response_json_schema: {
+                        type: "object",
+                        properties: {
+                            pairs: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        fr: { type: "string" },
+                                        fa: { type: "string" },
+                                        pronunciation: { type: "string" }
+                                    },
+                                    required: ["fr", "fa"]
+                                }
                             }
-                        }
-                    },
-                    required: ["pairs"]
+                        },
+                        required: ["pairs"]
+                    }
+                });
+
+                const normalized = (result?.pairs || []).map((p, i) => ({
+                    id: `tc-${i}`,
+                    fr: p.fr,
+                    fa: p.fa,
+                    pronunciation: p.pronunciation || '',
+                }));
+                if (normalized.length > 0) {
+                    setWords(shuffle(normalized));
+                    if (result?.pairs) {
+                        setCachedContent('timed_challenge', level, '', result.pairs);
+                    }
+                    setPhase('idle');
+                    return;
                 }
-            });
-        } catch (err) {
-            console.error("Timed challenge word generation error:", err);
-            toast.error(err.message || "Impossible de charger le defi. Verifiez votre cle API.");
-            setPhase('idle');
-            return;
+            } catch (err) {
+                console.error("Timed challenge error (falling back):", err);
+            }
         }
 
-        const normalized = (result?.pairs || []).map((p, i) => ({
-            id: `tc-${i}`,
-            fr: p.fr,
-            fa: p.fa,
-            pronunciation: p.pronunciation || '',
-        }));
-        setWords(shuffle(normalized));
-
-        // Cache the generated content
-        if (result?.pairs && result.pairs.length > 0) {
-            setCachedContent('timed_challenge', level, '', result.pairs);
+        // Fallback: translate basic French words via free API
+        try {
+            const basicWords = ['Bonjour', 'Merci', 'Maison', 'Eau', 'Pain', 'Famille', 'Ami',
+                'Livre', 'Chat', 'Soleil', 'École', 'Voiture', 'Jardin', 'Musique', 'Plage',
+                'Montagne', 'Travail', 'Voyage', 'Restaurant', 'Chaussures', 'Étoile',
+                'Fleur', 'Porte', 'Fenêtre', 'Chemin', 'Rivière', 'Pont', 'Village', 'Champ'];
+            const pairs = await Promise.all(
+                basicWords.map(async (w) => {
+                    const fa = await freeTranslate(w, 'Français', 'Persan').catch(() => '');
+                    return { fr: w, fa, pronunciation: '' };
+                })
+            );
+            const normalized = pairs.map((p, i) => ({
+                id: `tc-${i}`,
+                fr: p.fr,
+                fa: p.fa,
+                pronunciation: p.pronunciation || '',
+            }));
+            setWords(shuffle(normalized));
+            if (!apiKey) {
+                toast.info("Mode gratuit : mots prédéfinis. Ajoutez une clé API pour du contenu IA.");
+            }
+        } catch (err) {
+            console.error("Fallback timed challenge error:", err);
+            toast.error("Erreur lors du chargement du défi.");
         }
 
         setPhase('idle');

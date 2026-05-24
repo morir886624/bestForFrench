@@ -9,6 +9,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+const BUILT_IN_QUIZ = [
+  { question: "Comment dit-on 'chat' en persan ?", correct: "گربه", correct_pronunciation: "gorbe", options: ["گربه", "سگ", "پرنده", "ماهی"] },
+  { question: "Comment dit-on 'merci' en persan ?", correct: "ممنون", correct_pronunciation: "mamnoon", options: ["ممنون", "سلام", "خداحافظ", "بله"] },
+  { question: "Comment dit-on 'maison' en persan ?", correct: "خانه", correct_pronunciation: "khaneh", options: ["خانه", "ماشین", "کتاب", "آب"] },
+  { question: "Comment dit-on 'eau' en persan ?", correct: "آب", correct_pronunciation: "ab", options: ["آب", "شیر", "نان", "چای"] },
+  { question: "Comment dit-on 'pain' en persan ?", correct: "نان", correct_pronunciation: "nan", options: ["نان", "برنج", "گوشت", "پنیر"] },
+  { question: "Comment dit-on 'ami' en persan ?", correct: "دوست", correct_pronunciation: "doost", options: ["دوست", "دشمن", "پدر", "مادر"] },
+  { question: "Comment dit-on 'soleil' en persan ?", correct: "آفتاب", correct_pronunciation: "aaftab", options: ["آفتاب", "ماه", "ستاره", "ابر"] },
+  { question: "Comment dit-on 'livre' en persan ?", correct: "کتاب", correct_pronunciation: "ketab", options: ["کتاب", "قلم", "دفت", "چوب"] },
+  { question: "Comment dit-on 'famille' en persan ?", correct: "خانواده", correct_pronunciation: "khaanevadeh", options: ["خانواده", "دوست", "همسایه", "معلم"] },
+  { question: "Comment dit-on 'école' en persan ?", correct: "مدرسه", correct_pronunciation: "madreseh", options: ["مدرسه", "بیمارستان", "فروشگاه", "پارک"] },
+  { question: "Comment dit-on 'bonjour' en persan ?", correct: "سلام", correct_pronunciation: "salaam", options: ["سلام", "خداحافظ", "ممنون", "ببخشید"] },
+  { question: "Comment dit-on 'voyage' en persan ?", correct: "سفر", correct_pronunciation: "safar", options: ["سفر", "کار", "خواب", "غذا"] },
+  { question: "Comment dit-on 'travail' en persan ?", correct: "کار", correct_pronunciation: "kaar", options: ["کار", "بازی", "استراحت", "درس"] },
+  { question: "Comment dit-on 'musique' en persan ?", correct: "موسیقی", correct_pronunciation: "moosighi", options: ["موسیقی", "نقاشی", "رقص", "فیلم"] },
+  { question: "Comment dit-on 'montagne' en persan ?", correct: "کوه", correct_pronunciation: "kooh", options: ["کوه", "دریا", "رودخانه", "جنگل"] },
+];
+
 const QUIZ_TOPICS = [
     'les animaux', 'la nourriture', 'les couleurs', 'les chiffres', 'la famille',
     'le corps humain', 'les vêtements', 'les transports', 'les métiers', 'les émotions',
@@ -107,12 +125,25 @@ Une phrase avec un mot manqué (persan affiché), à compléter en français. Va
             };
         }
 
-        try {
-            const result = await base44.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
-            setQuestion({ ...result, topic, type: quizType });
-        } catch (err) {
-            console.error("Quiz generation error:", err);
-            toast.error(err.message || "Impossible de generer la question. Verifiez votre cle API.");
+        const apiKey = localStorage.getItem('app_api_key');
+        if (apiKey) {
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({ prompt, response_json_schema: schema });
+                if (result) {
+                    setQuestion({ ...result, topic, type: quizType });
+                    setIsLoading(false);
+                    return;
+                }
+            } catch (err) {
+                console.error("Quiz generation error (falling back):", err);
+            }
+        }
+
+        // Fallback: built-in quiz questions
+        const randomQ = BUILT_IN_QUIZ[Math.floor(Math.random() * BUILT_IN_QUIZ.length)];
+        setQuestion({ ...randomQ, topic: 'Vocabulaire', type: 'mcq' });
+        if (!apiKey) {
+            toast.info("Mode gratuit : questions prédéfinies. Ajoutez une clé API pour des questions IA illimitées.");
         }
         setIsLoading(false);
     };

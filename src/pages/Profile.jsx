@@ -337,8 +337,8 @@ export default function Profile() {
                                     <Key className="h-5 w-5 text-indigo-600" />
                                 </div>
                                 <div>
-                                    <h2 className="font-semibold text-slate-800 dark:text-slate-100">Clé API</h2>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">Nécessaire pour les traductions et l'IA</p>
+                                    <h2 className="font-semibold text-slate-800 dark:text-slate-100">Clé API OpenAI</h2>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Optionnelle — les traductions fonctionnent sans clé</p>
                                 </div>
                                 {savedKey && <Badge className="ml-auto bg-green-100 text-green-700 border-0">✓ Configurée</Badge>}
                             </div>
@@ -349,7 +349,7 @@ export default function Profile() {
                                 </div>
                             )}
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">{savedKey ? 'Modifier la clé API' : 'Entrez votre clé API'}</label>
+                                <label className="text-sm font-medium text-slate-700 dark:text-slate-200">{savedKey ? 'Modifier la clé API' : 'Clé API (optionnelle)'}</label>
                                 <div className="relative">
                                     <Input
                                         type={showKey ? 'text' : 'password'}
@@ -403,18 +403,20 @@ export default function Profile() {
 
                 {/* Info */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                    <Card className="border-0 shadow-md bg-indigo-50/80">
+                    <Card className="border-0 shadow-md bg-teal-50/80">
                         <CardContent className="p-4 space-y-3">
-                            <div className="flex items-center gap-2 text-indigo-700">
+                            <div className="flex items-center gap-2 text-teal-700">
                                 <Info className="h-4 w-4" />
-                                <span className="text-sm font-semibold">Comment obtenir une clé API ?</span>
+                                <span className="text-sm font-semibold">A propos de la cle API</span>
                             </div>
-                            <ol className="text-sm text-indigo-700 space-y-2 list-decimal list-inside">
-                                <li>Créez un compte sur <strong>openai.com</strong> ou le service IA de votre choix</li>
-                                <li>Accédez à la section <strong>API Keys</strong> dans votre tableau de bord</li>
-                                <li>Générez une nouvelle clé et copiez-la ici</li>
-                                <li>La clé est stockée localement sur votre appareil</li>
-                            </ol>
+                            <ul className="text-sm text-teal-700 space-y-2 list-disc list-inside">
+                                <li><strong>Les traductions fonctionnent sans cle API</strong> (gratuit)</li>
+                                <li>Ajoutez une cle OpenAI pour les fonctionnalites avancees : vocabulaire illimite, grammaire detaillee, quiz dynamiques</li>
+                                <li>Creez un compte sur <strong>platform.openai.com</strong></li>
+                                <li>Ajoutez un moyen de paiement et des credits (min 5$)</li>
+                                <li>Copiez votre cle API (elle commence par sk-)</li>
+                                <li>La cle est stockee localement sur votre appareil</li>
+                            </ul>
                         </CardContent>
                     </Card>
                 </motion.div>

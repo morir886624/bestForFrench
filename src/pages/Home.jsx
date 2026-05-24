@@ -176,33 +176,15 @@ export default function Home({ initialTab }) {
 
         let result;
         try {
-            result = await base44.integrations.Core.InvokeLLM({
-                prompt: `Traduis le mot/phrase "${word}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}.
-
-Fournis:
-1. La traduction (dans l'alphabet de la langue cible)
-2. La prononciation (translittération si applicable)
-3. Une définition courte en français
-
-Réponds uniquement avec le JSON demandé.`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        translation: { type: "string", description: "Traduction" },
-                        pronunciation: { type: "string", description: "Prononciation/translittération" },
-                        definition: { type: "string", description: "Définition en français" }
-                    },
-                    required: ["translation", "pronunciation", "definition"]
-                }
-            });
+            result = await base44.translateWithDetails(word, languageNames[sourceLanguage], languageNames[targetLanguage]);
         } catch (err) {
             console.error("Translation error:", err);
-            toast.error(err.message || "Erreur de traduction. Verifiez votre connexion ou cle API.");
+            toast.error(err.message || "Erreur de traduction. Verifiez votre connexion.");
             setIsTranslating(false);
             return;
         }
 
-        if (!result) {
+        if (!result || !result.translation) {
             toast.error("Impossible d'obtenir la traduction.");
             setIsTranslating(false);
             return;
@@ -248,14 +230,10 @@ Réponds uniquement avec le JSON demandé.`,
         setIsPreviewLoading(true);
         const timeoutId = setTimeout(async () => {
             try {
-                const result = await base44.integrations.Core.InvokeLLM({
-                    prompt: `Traduis "${val}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}. Reponds UNIQUEMENT avec la traduction, rien d'autre.`,
-                    response_json_schema: { type: "object", properties: { translation: { type: "string" } } }
-                });
-                setLivePreview(result?.translation || '');
+                const result = await base44.translate(val, languageNames[sourceLanguage], languageNames[targetLanguage]);
+                setLivePreview(result || '');
             } catch (err) {
                 console.error("Live preview error:", err);
-                // Silent fail for live preview - don't show toast
             }
             setIsPreviewLoading(false);
         }, 600);

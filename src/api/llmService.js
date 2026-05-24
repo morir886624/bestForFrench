@@ -1,101 +1,129 @@
 /**
- * LLM Service for translations and AI-generated content
- * Routes through Supabase Edge Function to avoid CORS issues with OpenAI
+ * LLM Service - translations work WITHOUT API key (free API).
+ * Advanced features (vocab generation, grammar, quiz) require OpenAI key.
  */
 
-const getApiKey = () => {
-  return localStorage.getItem('app_api_key') || '';
-};
+const getApiKey = () => localStorage.getItem('app_api_key') || '';
+const getEdgeUrl = () => `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invoke-llm`;
+const getAnonKey = () => import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const getEdgeFunctionUrl = () => {
-  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invoke-llm`;
-};
-
-const getAnonKey = () => {
-  return import.meta.env.VITE_SUPABASE_ANON_KEY;
-};
+const edgeHeaders = () => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${getAnonKey()}`,
+  'Apikey': getAnonKey(),
+});
 
 /**
- * Call LLM via Supabase Edge Function (proxies to OpenAI)
- * @param {string} prompt - The prompt to send
- * @param {Object} schema - JSON schema for response
- * @returns {Promise<Object|null>}
+ * Free translation — works WITHOUT API key
  */
-export async function invokeLLM(prompt, schema) {
+export async function translateText(text, sourceLang, targetLang) {
   const apiKey = getApiKey();
 
-  if (!apiKey) {
-    throw new Error('Cle API non configuree. Veuillez ajouter votre cle API OpenAI dans les parametres de votre profil.');
-  }
-
   try {
-    const response = await fetch(getEdgeFunctionUrl(), {
+    const response = await fetch(getEdgeUrl(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getAnonKey()}`,
-        'Apikey': getAnonKey(),
-      },
+      headers: edgeHeaders(),
       body: JSON.stringify({
-        prompt,
-        response_json_schema: schema,
-        api_key: apiKey,
-      })
+        mode: 'translate',
+        text,
+        source_lang: sourceLang,
+        target_lang: targetLang,
+        api_key: apiKey || undefined,
+        prompt: `Traduis "${text}" du ${sourceLang} vers le ${targetLang}. Reponds UNIQUEMENT avec la traduction.`,
+      }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Erreur serveur: ${response.status}`);
-    }
-
     const data = await response.json();
-    return data;
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Erreur de traduction');
+    }
+    return data.translation || '';
   } catch (error) {
-    // Re-throw with user-friendly message if it's a network error
     if (error.message === 'Failed to fetch') {
-      throw new Error('Erreur reseau. Verifiez votre connexion internet.');
+      throw new Error('Erreur reseau. Verifiez votre connexion.');
     }
     throw error;
   }
 }
 
 /**
- * Simple translation function
+ * OpenAI-powered LLM call — requires API key
  */
-export async function translateText(text, sourceLang, targetLang) {
-  const result = await invokeLLM(
-    `Traduis "${text}" du ${sourceLang} vers le ${targetLang}. Reponds UNIQUEMENT avec la traduction.`,
-    { type: 'object', properties: { translation: { type: 'string' } } }
-  );
-  return result?.translation || '';
+export async function invokeLLM(prompt, schema) {
+  const apiKey = getApiKey();
+
+  if (!apiKey) {
+    throw new Error('Cle API requise pour cette fonctionnalite. Ajoutez votre cle OpenAI dans Parametres.');
+  }
+
+  try {
+    const response = await fetch(getEdgeUrl(), {
+      method: 'POST',
+      headers: edgeHeaders(),
+      body: JSON.stringify({
+        mode: 'llm',
+        prompt,
+        response_json_schema: schema,
+        api_key: apiKey,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || 'Erreur serveur');
+    }
+    return data;
+  } catch (error) {
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Erreur reseau. Verifiez votre connexion.');
+    }
+    throw error;
+  }
 }
 
 /**
- * Get translation with details (pronunciation, definition)
+ * Translation with details — free translation + optional AI details
  */
 export async function getTranslationWithDetails(text, sourceLang, targetLang) {
-  return invokeLLM(
-    `Pour le mot/phrase "${text}" en ${sourceLang}:
-1. Donne la traduction en ${targetLang}
-2. Donne la prononciation/translitteration
-3. Donne une courte definition en francais
+  const apiKey = getApiKey();
 
-Reponds en JSON.`,
-    {
-      type: 'object',
-      properties: {
-        translation: { type: 'string' },
-        pronunciation: { type: 'string' },
-        definition: { type: 'string' }
-      },
-      required: ['translation', 'pronunciation', 'definition']
-    }
-  );
+  // Always get the free translation first
+  const translation = await translateText(text, sourceLang, targetLang);
+
+  if (!apiKey) {
+    // No API key — return translation without pronunciation/definition
+    return {
+      translation,
+      pronunciation: '',
+      definition: '',
+    };
+  }
+
+  // Has API key — get pronunciation + definition from OpenAI
+  try {
+    const details = await invokeLLM(
+      `Pour le mot/phrase "${text}" en ${sourceLang}, dont la traduction en ${targetLang} est "${translation}":
+1. Donne la prononciation/translitteration de la traduction
+2. Donne une courte definition en francais`,
+      {
+        type: 'object',
+        properties: {
+          pronunciation: { type: 'string' },
+          definition: { type: 'string' }
+        }
+      }
+    );
+    return {
+      translation,
+      pronunciation: details?.pronunciation || '',
+      definition: details?.definition || '',
+    };
+  } catch {
+    // OpenAI failed — still return the translation
+    return { translation, pronunciation: '', definition: '' };
+  }
 }
 
-/**
- * Generate vocabulary words by level
- */
 export async function generateVocabWords(level, targetLang, count = 10) {
   return invokeLLM(
     `Genere exactement ${count} mots francais de niveau ${level} avec pour chacun:
@@ -104,9 +132,7 @@ export async function generateVocabWords(level, targetLang, count = 10) {
 - une phrase d'exemple en francais
 - la traduction du mot en ${targetLang}
 - la traduction de la phrase d'exemple en ${targetLang}
-- la prononciation/translitteration du mot traduit
-
-Assure-toi que les mots sont varies et correspondent bien au niveau ${level}.`,
+- la prononciation/translitteration du mot traduit`,
     {
       type: 'object',
       properties: {
@@ -121,19 +147,14 @@ Assure-toi que les mots sont varies et correspondent bien au niveau ${level}.`,
               translation: { type: 'string' },
               example_translated: { type: 'string' },
               pronunciation: { type: 'string' }
-            },
-            required: ['word', 'definition', 'example_fr', 'translation', 'example_translated', 'pronunciation']
+            }
           }
         }
-      },
-      required: ['words']
+      }
     }
   );
 }
 
-/**
- * Generate grammar lessons
- */
 export async function generateGrammarLessons(level, count = 5) {
   return invokeLLM(
     `Genere ${count} fiches de grammaire francaise de niveau ${level} pour un apprenant persanophone.
@@ -161,38 +182,20 @@ Chaque fiche doit contenir:
               explanation_fa: { type: 'string' },
               rule: { type: 'string' },
               rule_fa: { type: 'string' },
-              examples: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    fr: { type: 'string' },
-                    fa: { type: 'string' }
-                  }
-                }
-              },
+              examples: { type: 'array', items: { type: 'object', properties: { fr: { type: 'string' }, fa: { type: 'string' } } } },
               tip: { type: 'string' },
               tip_fa: { type: 'string' }
-            },
-            required: ['title', 'title_fa', 'explanation', 'explanation_fa', 'rule', 'rule_fa', 'examples', 'tip', 'tip_fa']
+            }
           }
         }
-      },
-      required: ['lessons']
+      }
     }
   );
 }
 
-/**
- * Generate word pairs for exercises
- */
 export async function generateWordPairs(level, count = 10) {
   return invokeLLM(
-    `Genere exactement ${count} paires de mots francais-persan de niveau ${level}.
-Chaque paire doit avoir:
-- un mot francais
-- sa traduction en persan (script persan)
-- sa translitteration/prononciation`,
+    `Genere exactement ${count} paires de mots francais-persan de niveau ${level}.`,
     {
       type: 'object',
       properties: {
@@ -204,12 +207,10 @@ Chaque paire doit avoir:
               fr: { type: 'string' },
               fa: { type: 'string' },
               pronunciation: { type: 'string' }
-            },
-            required: ['fr', 'fa']
+            }
           }
         }
-      },
-      required: ['pairs']
+      }
     }
   );
 }

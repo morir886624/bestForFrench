@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
+import { translateText as freeTranslate } from '@/api/llmService';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
 
     const isRTL = (lang) => ['fa', 'ar'].includes(lang);
 
-    const translateText = useCallback(
+    const doTranslate = useCallback(
         debounce(async (text) => {
             if (!text.trim()) {
                 setTranslation('');
@@ -33,28 +34,20 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
             setSaved(false);
 
             try {
-                const result = await base44.integrations.Core.InvokeLLM({
-                    prompt: `Traduis "${text}" du ${languageNames[sourceLanguage]} vers le ${languageNames[targetLanguage]}. Reponds UNIQUEMENT avec la traduction, rien d'autre.`,
-                    response_json_schema: {
-                        type: "object",
-                        properties: {
-                            translation: { type: "string" }
-                        }
-                    }
-                });
-                setTranslation(result?.translation || '');
+                const result = await freeTranslate(text, languageNames[sourceLanguage], languageNames[targetLanguage]);
+                setTranslation(result || '');
             } catch (err) {
                 console.error("Live translation error:", err);
-                toast.error(err.message || "Erreur de traduction. Verifiez votre cle API dans les parametres.");
+                toast.error(err.message || "Erreur de traduction.");
             }
             setIsTranslating(false);
-        }, 500),
+        }, 600),
         [sourceLanguage, targetLanguage, languageNames]
     );
 
     useEffect(() => {
-        translateText(inputText);
-    }, [inputText, translateText]);
+        doTranslate(inputText);
+    }, [inputText, doTranslate]);
 
     // Reset saved state when input or languages change
     useEffect(() => {
@@ -78,26 +71,13 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
         if (!inputText.trim() || !translation) return;
         setIsSaving(true);
 
-        // Get pronunciation + definition via a second LLM call
-        let details;
+        // Get pronunciation + definition (free for translation, OpenAI optional for details)
+        let details = { pronunciation: '', definition: '' };
         try {
-            details = await base44.integrations.Core.InvokeLLM({
-                prompt: `Pour le mot/phrase "${inputText}" en ${languageNames[sourceLanguage]}, dont la traduction en ${languageNames[targetLanguage]} est "${translation}":
-1. Donne la prononciation/translitteration de la traduction
-2. Donne une courte definition en francais`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        pronunciation: { type: "string" },
-                        definition: { type: "string" }
-                    }
-                }
-            });
+            details = await base44.translateWithDetails(inputText, languageNames[sourceLanguage], languageNames[targetLanguage]);
         } catch (err) {
             console.error("Details generation error:", err);
-            toast.error(err.message || "Erreur lors de la recuperation des details.");
-            setIsSaving(false);
-            return;
+            // Continue saving even without details
         }
 
         const translationData = {

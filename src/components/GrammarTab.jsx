@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { translateText as freeTranslate } from '@/api/llmService';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,44 @@ const LEVELS = [
     { id: 'B2', label: 'B2 – Avancé', color: 'bg-purple-100 text-purple-700 border-purple-200', bg: 'from-purple-50 to-violet-50', border: 'border-purple-100' },
     { id: 'C1', label: 'C1 – Expert', color: 'bg-rose-100 text-rose-700 border-rose-200', bg: 'from-rose-50 to-pink-50', border: 'border-rose-100' },
 ];
+
+const BUILT_IN_GRAMMAR = {
+  A1: [
+    { title: "Les articles définis (le, la, l', les)", explanation: "En français, les articles définis s'accordent en genre et en nombre avec le nom.", rule: "Masculin singulier = le, Féminin singulier = la, Devant voyelle = l', Pluriel = les", tip: "Attention : 'le' et 'la' deviennent 'l'' devant une voyelle ou un h muet." },
+    { title: "Le verbe être au présent", explanation: "Le verbe être (to be) est essentiel en français. Il s'utilise pour décrire l'état ou l'identité.", rule: "je suis, tu es, il/elle est, nous sommes, vous êtes, ils/elles sont", tip: "Ne confondez pas 'est' (verbe être) avec 'et' (conjonction de coordination)." },
+    { title: "Le verbe avoir au présent", explanation: "Le verbe avoir (to have) est utilisé pour exprimer la possession et dans de nombreuses expressions.", rule: "j'ai, tu as, il/elle a, nous avons, vous avez, ils/elles ont", tip: "Attention à la prononciation : 'ont' se prononce comme 'on' (nasal)." },
+    { title: "Les pronoms sujets", explanation: "Les pronoms sujets remplacent le nom sujet dans la phrase.", rule: "je (j'), tu, il/elle/on, nous, vous, ils/elles", tip: "'On' est très utilisé à l'oral pour remplacer 'nous'." },
+    { title: "Masculin et féminin des noms", explanation: "Chaque nom français a un genre : masculin ou féminin. Il faut l'apprendre par cœur.", rule: "En général : -e final = féminin (une maison), consonne finale = masculin (un livre)", tip: "Il y a beaucoup d'exceptions ! Par exemple : 'un problème' est masculin malgré le -e." },
+  ],
+  A2: [
+    { title: "Le passé composé", explanation: "Le passé composé exprime une action terminée dans le passé.", rule: "Sujet + avoir/être (conjugué) + participe passé", tip: "Certains verbes utilisent 'être' comme auxiliaire (aller, venir, monter, descendre...)." },
+    { title: "Les adjectifs possessifs", explanation: "Les adjectifs possessifs indiquent à qui appartient quelque chose.", rule: "mon/ma/mes, ton/ta/tes, son/sa/ses, notre/nos, votre/vos, leur/leurs", tip: "Devant un nom féminin commençant par une voyelle, on utilise 'mon', 'ton', 'son' au lieu de 'ma', 'ta', 'sa'." },
+    { title: "Le futur proche", explanation: "Le futur proche exprime une action qui va se produire bientôt.", rule: "Sujet + aller (conjugué) + verbe à l'infinitif", tip: "Exemple : 'Je vais manger' = I am going to eat." },
+    { title: "Les prépositions de lieu", explanation: "Les prépositions de lieu indiquent où se trouve quelque chose.", rule: "dans, en, à, sur, sous, devant, derrière, entre, chez", tip: "'À' devient 'au' devant un nom masculin (au restaurant) et 'aux' devant un pluriel." },
+    { title: "L'imparfait", explanation: "L'imparfait décrit des habitudes ou des descriptions dans le passé.", rule: "Radical du nous au présent + -ais, -ais, -ait, -ions, -iez, -aient", tip: "L'imparfait est souvent utilisé avec le passé composé : l'imparfait pour le décor, le passé composé pour l'événement." },
+  ],
+  B1: [
+    { title: "Le subjonctif présent", explanation: "Le subjonctif exprime l'incertitude, le doute, le souhait ou l'émotion.", rule: "Après : il faut que, je veux que, bien que, pour que, avant que + subjonctif", tip: "Le subjonctif se forme à partir du radical de 'ils' au présent + -e, -es, -e, -ions, -iez, -ent." },
+    { title: "Les pronoms relatifs", explanation: "Les pronoms relatifs relient deux propositions et remplacent un nom.", rule: "qui (sujet), que (objet), dont (possession), où (lieu/temps)", tip: "'Dont' remplace 'de + nom' : 'Le livre dont je parle' = 'Le livre de lequel je parle'." },
+    { title: "Le conditionnel présent", explanation: "Le conditionnel exprime un souhait, une hypothèse ou la politesse.", rule: "Radical du futur + -ais, -ais, -ait, -ions, -iez, -aient", tip: "Pour la politesse : 'Je voudrais' est plus poli que 'Je veux'." },
+    { title: "Les pronoms COD et COI", explanation: "Les pronoms compléments remplacent les objets directs et indirects.", rule: "COD : me, te, le/la, nous, vous, les | COI : me, te, lui, nous, vous, leur", tip: "L'ordre des pronoms : COI + COD : 'Je te le donne' (pas 'Je le te donne')." },
+    { title: "Le plus-que-parfait", explanation: "Le plus-que-parfait exprime une action antérieure à une autre action passée.", rule: "Sujet + avoir/être à l'imparfait + participe passé", tip: "Signal : le plus-que-parfait est souvent accompagné d'un autre temps du passé dans le récit." },
+  ],
+  B2: [
+    { title: "Le subjonctif passé", explanation: "Le subjonctif passé exprime une action achevée avant l'action principale.", rule: "avoir/être au subjonctif présent + participe passé", tip: "Utilisé quand le verbe au subjonctif doit être antérieur à un autre : 'Je suis content que tu aies réussi.'" },
+    { title: "La voix passive", explanation: "La voix passive met l'objet en position de sujet.", rule: "Sujet + être conjugué + participe passé + par + agent", tip: "Seuls les verbes transitifs directs peuvent être mis à la voix passive." },
+    { title: "Les propositions concessives", explanation: "Les concessives opposent deux idées en admettant l'une.", rule: "bien que + subjonctif | même si + indicatif | cependant, toutefois, néanmoins", tip: "'Bien que' exige le subjonctif, 'même si' exige l'indicatif. C'est une erreur fréquente." },
+    { title: "Le discours indirect", explanation: "Le discours indirect rapporte les paroles de quelqu'un sans les citer directement.", rule: "Concordance des temps : présent → imparfait, passé composé → plus-que-parfait", tip: "Les pronoms et les indicateurs de temps changent aussi : 'demain' → 'le lendemain'." },
+    { title: "Le gérondif", explanation: "Le gérondif exprime la simultanéité, la cause ou la condition.", rule: "en + participe présent : en marchant, en lisant, en travaillant", tip: "Le sujet du gérondif doit être le même que celui du verbe principal." },
+  ],
+  C1: [
+    { title: "Le subjonctif imparfait", explanation: "Le subjonctif imparfait s'utilise dans la littérature et le langage soutenu après un verbe au passé.", rule: "Radical du passé simple + -asse, -asses, -ât, -assions, -assiez, -assent", tip: "Ce temps est surtout littéraire. À l'oral, on utilise le subjonctif présent même après un passé." },
+    { title: "Les particules explétives", explanation: "Le 'ne' explétif apparaît sans valeur négative dans certaines subordonnées.", rule: "Après : craindre que, de peur que, avant que, sans que + ne explétif", tip: "Le 'ne' explétif est obligatoire à l'écrit soutenu, facultatif à l'oral." },
+    { title: "L'inversion complexe", explanation: "L'inversion du sujet peut être simple, complexe ou avec un pronom sujet résumé.", rule: "Question : Verbe + pronom sujet | L'inversion complexe : Verbe + NOM + pronom", tip: "Après un nom propre, on ajoute un pronom sujet : 'Marie chante-elle ?' (pas 'Chante Marie ?')" },
+    { title: "Le passé simple", explanation: "Le passé simple est le temps du récit littéraire. Il n'est pas utilisé à l'oral.", rule: "-ai, -as, -a, -âmes, -âtes, -èrent (1er groupe) | -is, -is, -it, -îmes, -îtes, -irent (2e)", tip: "À l'oral, le passé composé remplace toujours le passé simple." },
+    { title: "La nominalisation", explanation: "La nominalisation transforme un verbe ou un adjectif en nom pour rendre le style plus dense.", rule: "Verbe → nom : créer → création | Adjectif → nom : grand → grandeur", tip: "La nominalisation est caractéristique du style journalistique et académique." },
+  ],
+};
 
 export default function GrammarTab({ appLang }) {
     const [selectedLevel, setSelectedLevel] = useState('A1');
@@ -54,10 +93,12 @@ export default function GrammarTab({ appLang }) {
             }
         }
 
-        let result;
-        try {
-            result = await base44.integrations.Core.InvokeLLM({
-                prompt: `Genere 5 fiches de grammaire francaise de niveau ${selectedLevel} pour un apprenant persanophone.
+        // Try OpenAI first if API key exists
+        const apiKey = localStorage.getItem('app_api_key');
+        if (apiKey) {
+            try {
+                const result = await base44.integrations.Core.InvokeLLM({
+                    prompt: `Genere 5 fiches de grammaire francaise de niveau ${selectedLevel} pour un apprenant persanophone.
 Chaque fiche doit contenir :
 1. Le point de grammaire en francais (ex: "Le present de l'indicatif")
 2. La traduction persane du titre
@@ -70,53 +111,74 @@ Chaque fiche doit contenir :
 9. Ce meme point d'attention traduit en persan
 
 Niveau ${selectedLevel}: ${level?.label}`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        lessons: {
-                            type: "array",
-                            items: {
-                                type: "object",
-                                properties: {
-                                                title: { type: "string", description: "Point de grammaire en francais" },
-                                                title_fa: { type: "string", description: "Titre en persan" },
-                                                explanation: { type: "string", description: "Explication en francais" },
-                                                explanation_fa: { type: "string", description: "Explication traduite en persan" },
-                                                rule: { type: "string", description: "Regle principale en francais" },
-                                                rule_fa: { type: "string", description: "Regle principale traduite en persan" },
-                                                examples: {
-                                                    type: "array",
-                                                    items: {
-                                                        type: "object",
-                                                        properties: {
-                                                            fr: { type: "string" },
-                                                            fa: { type: "string" }
-                                                        }
-                                                    }
-                                                },
-                                                tip: { type: "string", description: "Erreur frequente ou astuce en francais" },
-                                                tip_fa: { type: "string", description: "Astuce traduite en persan" }
-                                            },
-                                            required: ["title", "title_fa", "explanation", "explanation_fa", "rule", "rule_fa", "examples", "tip", "tip_fa"]
-                        }
+                    response_json_schema: {
+                        type: "object",
+                        properties: {
+                            lessons: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        title: { type: "string" },
+                                        title_fa: { type: "string" },
+                                        explanation: { type: "string" },
+                                        explanation_fa: { type: "string" },
+                                        rule: { type: "string" },
+                                        rule_fa: { type: "string" },
+                                        examples: { type: "array", items: { type: "object", properties: { fr: { type: "string" }, fa: { type: "string" } } } },
+                                        tip: { type: "string" },
+                                        tip_fa: { type: "string" }
+                                    },
+                                    required: ["title", "title_fa", "explanation", "explanation_fa", "rule", "rule_fa", "examples", "tip", "tip_fa"]
+                                }
+                            }
+                        },
+                        required: ["lessons"]
                     }
-                },
-                required: ["lessons"]
+                });
+
+                const generatedLessons = result?.lessons || [];
+                if (generatedLessons.length > 0) {
+                    setLessons(generatedLessons);
+                    setCachedContent('grammar', selectedLevel, '', generatedLessons);
+                    setIsLoading(false);
+                    return;
+                }
+            } catch (err) {
+                console.error("Grammar generation error (falling back to built-in):", err);
             }
-            });
-        } catch (err) {
-            console.error("Grammar generation error:", err);
-            toast.error(err.message || "Impossible de generer les fiches. Verifiez votre cle API.");
-            setIsLoading(false);
-            return;
         }
 
-        const generatedLessons = result?.lessons || [];
-        setLessons(generatedLessons);
-
-        // Cache the generated content
-        if (generatedLessons.length > 0) {
-            setCachedContent('grammar', selectedLevel, '', generatedLessons);
+        // Fallback: built-in grammar lessons + free translation for Persian
+        try {
+            const builtIn = BUILT_IN_GRAMMAR[selectedLevel] || BUILT_IN_GRAMMAR.A1;
+            const translatedLessons = await Promise.all(
+                builtIn.map(async (l) => {
+                    const [titleFa, ruleFa, tipFa] = await Promise.all([
+                        freeTranslate(l.title, 'Français', 'Persan').catch(() => ''),
+                        freeTranslate(l.rule, 'Français', 'Persan').catch(() => ''),
+                        freeTranslate(l.tip, 'Français', 'Persan').catch(() => ''),
+                    ]);
+                    return {
+                        title: l.title,
+                        title_fa: titleFa,
+                        explanation: l.explanation,
+                        explanation_fa: '',
+                        rule: l.rule,
+                        rule_fa: ruleFa,
+                        examples: [],
+                        tip: l.tip,
+                        tip_fa: tipFa,
+                    };
+                })
+            );
+            setLessons(translatedLessons);
+            if (!apiKey) {
+                toast.info("Mode gratuit : fiches prédéfinies. Ajoutez une clé API pour du contenu IA illimité.");
+            }
+        } catch (err) {
+            console.error("Built-in grammar error:", err);
+            toast.error("Erreur lors du chargement des fiches.");
         }
 
         setIsLoading(false);
