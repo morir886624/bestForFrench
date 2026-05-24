@@ -112,7 +112,7 @@ Une phrase avec un mot manqué (persan affiché), à compléter en français. Va
             setQuestion({ ...result, topic, type: quizType });
         } catch (err) {
             console.error("Quiz generation error:", err);
-            toast.error("Impossible de generer la question. Verifiez votre cle API.");
+            toast.error(err.message || "Impossible de generer la question. Verifiez votre cle API.");
         }
         setIsLoading(false);
     };

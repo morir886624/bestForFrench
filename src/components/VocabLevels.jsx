@@ -135,7 +135,7 @@ Assure-toi que les 10 mots sont variés et correspondent bien au niveau ${select
         });
         } catch (err) {
             console.error("Vocab generation error:", err);
-            toast.error("Impossible de generer le vocabulaire. Verifiez votre cle API.");
+            toast.error(err.message || "Impossible de generer le vocabulaire. Verifiez votre cle API.");
             setIsLoading(false);
             return;
         }

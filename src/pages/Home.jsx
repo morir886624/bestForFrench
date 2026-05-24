@@ -197,7 +197,7 @@ Réponds uniquement avec le JSON demandé.`,
             });
         } catch (err) {
             console.error("Translation error:", err);
-            toast.error("Erreur de traduction. Verifiez votre connexion ou cle API.");
+            toast.error(err.message || "Erreur de traduction. Verifiez votre connexion ou cle API.");
             setIsTranslating(false);
             return;
         }

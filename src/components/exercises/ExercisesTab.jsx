@@ -87,7 +87,7 @@ IMPORTANT : respecte strictement le niveau ${level}. Ne genere pas de mots trop 
             });
         } catch (err) {
             console.error("Exercise generation error:", err);
-            toast.error("Impossible de generer les exercices. Verifiez votre cle API.");
+            toast.error(err.message || "Impossible de generer les exercices. Verifiez votre cle API.");
             setError(err);
             setIsLoading(false);
             return;

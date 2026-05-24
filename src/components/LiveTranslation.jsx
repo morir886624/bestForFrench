@@ -45,7 +45,7 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
                 setTranslation(result?.translation || '');
             } catch (err) {
                 console.error("Live translation error:", err);
-                // Silent fail for live translation - don't show toast
+                toast.error(err.message || "Erreur de traduction. Verifiez votre cle API dans les parametres.");
             }
             setIsTranslating(false);
         }, 500),
@@ -95,7 +95,7 @@ export default function LiveTranslation({ sourceLanguage, targetLanguage, langua
             });
         } catch (err) {
             console.error("Details generation error:", err);
-            toast.error("Erreur lors de la recuperation des details.");
+            toast.error(err.message || "Erreur lors de la recuperation des details.");
             setIsSaving(false);
             return;
         }

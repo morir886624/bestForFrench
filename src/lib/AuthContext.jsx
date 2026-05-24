@@ -5,33 +5,35 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
+  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     checkAuthState();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setIsAuthenticated(!!session?.user);
-      if (session?.user) {
-        getOrCreateProfile(session.user);
-      } else {
-        setProfile(null);
-      }
-    });
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+        setIsAuthenticated(!!session?.user);
+        if (session?.user) {
+          getOrCreateProfile(session.user);
+        } else {
+          setProfile(null);
+        }
+      });
 
-    return () => subscription.unsubscribe();
+      return () => subscription.unsubscribe();
+    } catch (err) {
+      console.warn('Auth state listener setup failed:', err);
+      setIsLoadingAuth(false);
+    }
   }, []);
 
   const checkAuthState = async () => {
     try {
-      setIsLoadingPublicSettings(true);
-      setAuthError(null);
-
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
@@ -44,34 +46,26 @@ export const AuthProvider = ({ children }) => {
         setProfile(null);
       }
     } catch (error) {
-      console.error('Auth state check failed:', error);
-      setAuthError({
-        type: 'unknown',
-        message: error.message || 'An unexpected error occurred'
-      });
+      console.warn('Auth check failed (running in guest mode):', error);
+      setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setIsLoadingAuth(false);
-      setIsLoadingPublicSettings(false);
     }
   };
 
   const getOrCreateProfile = async (authUser) => {
     try {
-      const { data: existingProfile, error: fetchError } = await supabase
+      const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', authUser.id)
         .maybeSingle();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('Error fetching profile:', fetchError);
-        return;
-      }
-
       if (existingProfile) {
         setProfile(existingProfile);
       } else {
-        const { data: newProfile, error: createError } = await supabase
+        const { data: newProfile } = await supabase
           .from('profiles')
           .insert({
             user_id: authUser.id,
@@ -81,14 +75,12 @@ export const AuthProvider = ({ children }) => {
           .select()
           .single();
 
-        if (createError) {
-          console.error('Error creating profile:', createError);
-        } else {
+        if (newProfile) {
           setProfile(newProfile);
         }
       }
     } catch (err) {
-      console.error('Profile creation error:', err);
+      console.warn('Profile creation error:', err);
     }
   };
 
@@ -96,23 +88,14 @@ export const AuthProvider = ({ children }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          full_name: displayName
-        }
-      }
+      options: { data: { full_name: displayName } }
     });
-
     if (error) throw error;
     return data;
   };
 
   const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
   };
@@ -145,8 +128,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

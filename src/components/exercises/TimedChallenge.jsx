@@ -81,7 +81,7 @@ Respecte strictement le niveau ${level}. Chaque paire : un mot francais + sa tra
             });
         } catch (err) {
             console.error("Timed challenge word generation error:", err);
-            toast.error("Impossible de charger le defi. Verifiez votre cle API.");
+            toast.error(err.message || "Impossible de charger le defi. Verifiez votre cle API.");
             setPhase('idle');
             return;
         }

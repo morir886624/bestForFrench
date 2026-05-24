@@ -106,7 +106,7 @@ Niveau ${selectedLevel}: ${level?.label}`,
             });
         } catch (err) {
             console.error("Grammar generation error:", err);
-            toast.error("Impossible de generer les fiches. Verifiez votre cle API.");
+            toast.error(err.message || "Impossible de generer les fiches. Verifiez votre cle API.");
             setIsLoading(false);
             return;
         }

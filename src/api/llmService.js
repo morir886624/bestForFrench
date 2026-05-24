@@ -1,16 +1,22 @@
 /**
  * LLM Service for translations and AI-generated content
- * Uses OpenAI API directly via user-provided API key
+ * Routes through Supabase Edge Function to avoid CORS issues with OpenAI
  */
-
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 const getApiKey = () => {
   return localStorage.getItem('app_api_key') || '';
 };
 
+const getEdgeFunctionUrl = () => {
+  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invoke-llm`;
+};
+
+const getAnonKey = () => {
+  return import.meta.env.VITE_SUPABASE_ANON_KEY;
+};
+
 /**
- * Call OpenAI API with structured output
+ * Call LLM via Supabase Edge Function (proxies to OpenAI)
  * @param {string} prompt - The prompt to send
  * @param {Object} schema - JSON schema for response
  * @returns {Promise<Object|null>}
@@ -19,65 +25,36 @@ export async function invokeLLM(prompt, schema) {
   const apiKey = getApiKey();
 
   if (!apiKey) {
-    throw new Error('Clé API non configurée. Veuillez ajouter votre clé API OpenAI dans les paramètres.');
+    throw new Error('Cle API non configuree. Veuillez ajouter votre cle API OpenAI dans les parametres de votre profil.');
   }
 
-  const systemPrompt = schema
-    ? `Tu es un assistant utile qui répond toujours en JSON valide selon le schema fourni. Réponds UNIQUEMENT avec le JSON, sans texte additionnel.
-
-Schema de réponse:
-${JSON.stringify(schema, null, 2)}`
-    : 'Tu es un assistant utile.';
-
   try {
-    const response = await fetch(OPENAI_API_URL, {
+    const response = await fetch(getEdgeFunctionUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${getAnonKey()}`,
+        'Apikey': getAnonKey(),
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 2000
+        prompt,
+        response_json_schema: schema,
+        api_key: apiKey,
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      if (response.status === 401) {
-        throw new Error('Clé API invalide. Vérifiez votre clé OpenAI.');
-      }
-      if (response.status === 429) {
-        throw new Error('Limite de requêtes atteinte. Réessayez dans quelques instants.');
-      }
-      throw new Error(errorData.error?.message || `Erreur API: ${response.status}`);
+      throw new Error(errorData.error || `Erreur serveur: ${response.status}`);
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('Réponse vide de l\'API');
-    }
-
-    // Parse JSON response
-    try {
-      return JSON.parse(content);
-    } catch (parseError) {
-      // Try to extract JSON from the response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      throw new Error('Impossible de parser la réponse JSON');
-    }
+    return data;
   } catch (error) {
-    console.error('LLM invocation error:', error);
+    // Re-throw with user-friendly message if it's a network error
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Erreur reseau. Verifiez votre connexion internet.');
+    }
     throw error;
   }
 }
@@ -87,7 +64,7 @@ ${JSON.stringify(schema, null, 2)}`
  */
 export async function translateText(text, sourceLang, targetLang) {
   const result = await invokeLLM(
-    `Traduis "${text}" du ${sourceLang} vers le ${targetLang}. Réponds UNIQUEMENT avec la traduction.`,
+    `Traduis "${text}" du ${sourceLang} vers le ${targetLang}. Reponds UNIQUEMENT avec la traduction.`,
     { type: 'object', properties: { translation: { type: 'string' } } }
   );
   return result?.translation || '';
@@ -100,10 +77,10 @@ export async function getTranslationWithDetails(text, sourceLang, targetLang) {
   return invokeLLM(
     `Pour le mot/phrase "${text}" en ${sourceLang}:
 1. Donne la traduction en ${targetLang}
-2. Donne la prononciation/translittération
-3. Donne une courte définition en français
+2. Donne la prononciation/translitteration
+3. Donne une courte definition en francais
 
-Réponds en JSON.`,
+Reponds en JSON.`,
     {
       type: 'object',
       properties: {
@@ -121,15 +98,15 @@ Réponds en JSON.`,
  */
 export async function generateVocabWords(level, targetLang, count = 10) {
   return invokeLLM(
-    `Génère exactement ${count} mots français de niveau ${level} avec pour chacun:
-- le mot français
-- sa définition simple en français (1 phrase)
-- une phrase d'exemple en français
+    `Genere exactement ${count} mots francais de niveau ${level} avec pour chacun:
+- le mot francais
+- sa definition simple en francais (1 phrase)
+- une phrase d'exemple en francais
 - la traduction du mot en ${targetLang}
 - la traduction de la phrase d'exemple en ${targetLang}
-- la prononciation/translittération du mot traduit
+- la prononciation/translitteration du mot traduit
 
-Assure-toi que les mots sont variés et correspondent bien au niveau ${level}.`,
+Assure-toi que les mots sont varies et correspondent bien au niveau ${level}.`,
     {
       type: 'object',
       properties: {
@@ -159,16 +136,16 @@ Assure-toi que les mots sont variés et correspondent bien au niveau ${level}.`,
  */
 export async function generateGrammarLessons(level, count = 5) {
   return invokeLLM(
-    `Génère ${count} fiches de grammaire française de niveau ${level} pour un apprenant persanophone.
+    `Genere ${count} fiches de grammaire francaise de niveau ${level} pour un apprenant persanophone.
 Chaque fiche doit contenir:
-1. Le point de grammaire en français
+1. Le point de grammaire en francais
 2. La traduction persane du titre
-3. Une explication claire en français
-4. La même explication traduite en persan
-5. La règle principale en français
-6. La même règle traduite en persan
-7. 2 exemples en français avec leur traduction persane
-8. Un point d'attention en français
+3. Une explication claire en francais
+4. La meme explication traduite en persan
+5. La regle principale en francais
+6. La meme regle traduite en persan
+7. 2 exemples en francais avec leur traduction persane
+8. Un point d'attention en francais
 9. Ce point traduit en persan`,
     {
       type: 'object',
@@ -211,11 +188,11 @@ Chaque fiche doit contenir:
  */
 export async function generateWordPairs(level, count = 10) {
   return invokeLLM(
-    `Génère exactement ${count} paires de mots français-persan de niveau ${level}.
+    `Genere exactement ${count} paires de mots francais-persan de niveau ${level}.
 Chaque paire doit avoir:
-- un mot français
+- un mot francais
 - sa traduction en persan (script persan)
-- sa translittération/prononciation`,
+- sa translitteration/prononciation`,
     {
       type: 'object',
       properties: {

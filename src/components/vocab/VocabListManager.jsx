@@ -134,7 +134,7 @@ Pour chaque mot, donne: mot en francais, traduction en ${languageNames[targetLan
             });
         } catch (err) {
             console.error("Word suggestion error:", err);
-            toast.error("Impossible de suggerer des mots. Verifiez votre cle API.");
+            toast.error(err.message || "Impossible de suggerer des mots. Verifiez votre cle API.");
             setSuggestingWords(false);
             return;
         }

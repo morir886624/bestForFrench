@@ -1,5 +1,6 @@
-// Re-export the new Supabase-based API for backward compatibility
 import { api, supabase } from './supabaseApi';
+import { invokeLLM } from './llmService';
+
 export { supabase };
 
 // For backward compatibility with base44 SDK pattern
@@ -9,9 +10,7 @@ export const base44 = {
   integrations: {
     Core: {
       InvokeLLM: async (params) => {
-        const { invokeLLM } = await import('./llmService');
-        const result = await invokeLLM(params.prompt, params.response_json_schema);
-        return result;
+        return invokeLLM(params.prompt, params.response_json_schema);
       }
     }
   }
