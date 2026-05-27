@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { toast } from "sonner";
 import {
     Languages, Target, Zap, Award, BookOpen, Star, Brain,
     Settings as SettingsIcon, Key, Check, Eye, EyeOff, Info,
-    RotateCcw, History, BarChart2, AlertTriangle, Trash2, UserX, Loader2
+    RotateCcw, History, BarChart2, AlertTriangle, Trash2, UserX, Loader2, ArrowLeft
 } from "lucide-react";
 import DailyReminder from "@/components/DailyReminder";
 import GoogleSheetsSettings from "@/components/GoogleSheetsSettings";
@@ -207,6 +208,11 @@ export default function Profile() {
 
             {/* ── DASHBOARD SECTION ── */}
             <main className="max-w-2xl mx-auto px-4 pt-6 space-y-6">
+                {/* Back button */}
+                <Link to="/" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors">
+                    <ArrowLeft className="h-4 w-4" />
+                    Retour a l'accueil
+                </Link>
 
                 {/* Welcome banner */}
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
