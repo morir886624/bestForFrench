@@ -1,9 +1,12 @@
 import React from 'react';
-import { Globe, Sun, Moon } from 'lucide-react';
+import { Globe, Sun, Moon, User } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import { useTheme } from '@/lib/ThemeContext';
 
 export default function AppHeader({ appLang, onToggleLang }) {
     const { isDark, toggle } = useTheme();
+    const location = useLocation();
+    const isProfileActive = location.pathname === '/profile';
 
     return (
         <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 shadow-sm transition-colors duration-300">
@@ -12,6 +15,17 @@ export default function AppHeader({ appLang, onToggleLang }) {
                     {appLang === 'fa' ? 'مترجم' : 'Traductor'}
                 </span>
                 <div className="flex items-center gap-2">
+                    <Link
+                        to="/profile"
+                        className={`p-2 rounded-xl transition-colors ${
+                            isProfileActive
+                                ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400'
+                                : 'bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400'
+                        }`}
+                        title="Profil"
+                    >
+                        <User className="h-5 w-5" />
+                    </Link>
                     <button
                         onClick={toggle}
                         aria-label={isDark ? 'Passer en mode clair' : 'Passer en mode sombre'}
